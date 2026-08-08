@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-08",
+  "mission": "On-device LLM Systems",
+  "repository": "https://github.com/wxtshr001/learning_llm",
+  "current": {
+    "lesson_id": "0002",
+    "title": "reshape, transpose, head layout, and contiguous/view boundaries",
+    "status": "awaiting_submission",
+    "lesson": "lessons/0002-reshape-transpose-head-layout.html",
+    "exercise": "exercises/0002_head_layout.py",
+    "assessment": "assessments/0002-reshape-transpose-head-layout.md",
+    "submission": "submissions/0002.md"
+  },
+  "completed_lessons": ["0001"],
+  "completed_remediation": ["0001R", "0001R2"],
+  "next_normal_lesson": "0003",
+  "gate": {
+    "minimum_score": 80,
+    "critical_items": ["code", "question_1", "question_2", "question_3", "question_7"]
+  },
+  "last_verified_evidence": [
+    "learning-records/0003-linear-shape-and-calculation-passed.md",
+    "submissions/0001R2-feedback.md"
+  ]
+}

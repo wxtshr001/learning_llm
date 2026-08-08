@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Head Layout 速查表</title>
+<style>:root{--p:#fbfaf6;--i:#18242a;--m:#637078;--a:#176b70;--l:#d8ddd9}*{box-sizing:border-box}body{margin:0;background:var(--p);color:var(--i);font:17px/1.7 Georgia,"Noto Serif SC",serif}main{max-width:900px;margin:auto;padding:54px 28px 80px}h1{font-size:2.3rem;margin:.1em 0}.lede{color:var(--m)}section{border-top:1px solid var(--l);padding:25px 0}code,pre{font-family:Consolas,monospace}code{background:#eaf2ef;padding:.1em .35em;border-radius:4px}pre{background:#17262c;color:#eef5f2;padding:18px;border-radius:9px;overflow:auto}.rule{border-left:5px solid var(--a);padding:14px 18px;background:#edf7f4}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.65em;border-bottom:1px solid var(--l)}a{color:var(--a)}</style></head>
+<body><main><h1>Head Layout 速查表</h1><p class="lede">用于第 0002～0010 课。每次先写轴名，再写数字。</p>
+<section><h2>标准变换</h2><pre>[B,S,H]
+  reshape, H=N×D
+[B,S,N,D]
+  transpose(1,2)
+[B,N,S,D]</pre><p class="rule"><code>heads[b,n,s,d] = projected[b,s,n*D+d]</code></p></section>
+<section><h2>轴</h2><table><tr><th>轴</th><th>含义</th><th>是否被 split 改变</th></tr><tr><td>B</td><td>batch</td><td>不变</td></tr><tr><td>S</td><td>sequence/token</td><td>不变</td></tr><tr><td>H</td><td>hidden</td><td>拆为 N×D</td></tr><tr><td>N</td><td>heads</td><td>由 H 拆出</td></tr><tr><td>D</td><td>head_dim</td><td>H/N</td></tr></table></section>
+<section><h2>reshape 与 transpose</h2><ul><li><code>reshape</code>：元素总数不变，重新分组；可能返回 view，也可能复制。</li><li><code>transpose</code>：交换两个轴，通常返回共享 storage 的 view，并可能变成 non-contiguous。</li><li><code>view</code>：要求 shape 与 stride 兼容。</li><li><code>contiguous()</code>：按当前逻辑顺序生成连续布局，之后可安全 view。</li></ul></section>
+<section><h2>GQA layout</h2><pre>Q: [B, query_heads, S, D]
+K: [B, kv_heads,    S, D]
+V: [B, kv_heads,    S, D]</pre><p><a href="../lessons/0002-reshape-transpose-head-layout.html">返回第 0002 课</a></p></section></main></body></html>

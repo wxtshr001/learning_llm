@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 0001 课：从 shape 到 Linear</title>
+  <style>
+    :root{--paper:#fbfaf6;--ink:#17202a;--muted:#62717d;--accent:#176b70;--accent2:#d98943;--line:#d7ddd8;--card:#fff;--ok:#216e4a}
+    *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.72 Georgia,"Noto Serif SC",serif}
+    header,main,footer{max-width:940px;margin:auto;padding-left:28px;padding-right:28px} header{padding-top:60px;padding-bottom:30px}
+    .eyebrow{font:700 .78rem/1.2 system-ui;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)} h1{font-size:clamp(2.1rem,5vw,4rem);line-height:1.05;margin:.25em 0}
+    .lede{max-width:700px;color:var(--muted);font-size:1.15rem} nav{display:flex;gap:.7em;flex-wrap:wrap;margin-top:1.5em} nav a{color:var(--accent);text-decoration:none;border-bottom:1px solid}
+    section{padding:30px 0;border-top:1px solid var(--line)} h2{font-size:1.7rem;margin:.2em 0 .5em} h3{margin-top:1.6em} code,pre{font-family:Consolas,"SFMono-Regular",monospace} code{background:#eaf2ef;padding:.1em .35em;border-radius:4px}
+    pre{background:#16242a;color:#e9f3ef;padding:20px;border-radius:10px;overflow:auto;line-height:1.5} .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin:18px 0;box-shadow:0 6px 22px #1e383008}
+    .goal{border-left:5px solid var(--accent);background:#eef7f4}.warning{border-left:5px solid var(--accent2);background:#fff5e9}.formula{font-size:1.18rem;text-align:center;padding:1em}
+    label{display:block;font-weight:700;margin:.8em 0 .3em} input,textarea{width:100%;border:1px solid #b8c3bd;border-radius:7px;padding:10px;font:inherit;background:white} button{margin-top:10px;border:0;border-radius:7px;padding:10px 16px;background:var(--accent);color:white;font-weight:700;cursor:pointer}
+    .result{margin-top:10px;color:var(--ok);font-weight:700}.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.meta div{background:#edf2ef;padding:12px;border-radius:8px}
+    footer{padding-top:25px;padding-bottom:70px;color:var(--muted)} a{color:var(--accent)} @media print{body{background:white}.card{box-shadow:none}button,nav{display:none}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">On-device LLM Systems · Lesson 0001</div>
+  <h1>从 shape 到 Linear</h1>
+  <p class="lede">第一步不是背 Transformer，而是能把一行模型代码还原成明确的张量、索引和计算。这个能力会直接用于 Q/K/V projection、FFN、LM Head 与后续图转换调试。</p>
+  <div class="meta"><div><strong>时间</strong><br>45～75 分钟</div><div><strong>成果</strong><br>手写并测试 Linear</div><div><strong>门禁</strong><br>关键题全部正确</div></div>
+  <nav><a href="#source">资料</a><a href="#model">心智模型</a><a href="#practice">练习</a><a href="#assignment">作业</a><a href="../reference/0001-tensor-shape-cheatsheet.html">速查表</a></nav>
+</header>
+<main>
+  <section>
+    <div class="card goal"><strong>完成本课后，你应能：</strong>从 <code>X:[M,K]</code> 与 <code>W:[K,N]</code> 推导输出 shape；写出任一输出元素；解释 bias 广播；把同一计算映射到 LLM 的 Q projection。</div>
+  </section>
+
+  <section id="source">
+    <h2>1. 只读这份官方资料的三个小节</h2>
+    <p>打开 PyTorch 官方的 <a href="https://docs.pytorch.org/tutorials/beginner/basics/tensor_tutorial.html">Tensors 教程</a>，只看：</p>
+    <ol><li>Tensor attributes：shape、dtype、device。</li><li>Operations on tensors：矩阵乘法与逐元素乘法的区别。</li><li>Bridge with NumPy 可以略读；其他部分本课先跳过。</li></ol>
+    <p>阅读目标不是记 API，而是确认：tensor 是带 shape、dtype、device 的多维数组。读完立即回到本页。</p>
+  </section>
+
+  <section id="model">
+    <h2>2. Linear 到底做了什么</h2>
+    <pre>X: [M, K]
+W: [K, N]
+b: [N]
+
+Y = X @ W + b
+Y: [M, N]</pre>
+    <p>M 可以是 token 数，K 是输入特征数，N 是输出特征数。矩阵乘法在 K 上求和，因此 K 从输出 shape 中消失。</p>
+    <div class="card formula"><code>Y[i,j] = Σₖ X[i,k] × W[k,j] + b[j]</code></div>
+    <p>固定 <code>i</code> 与 <code>j</code> 后，取 X 的第 i 行与 W 的第 j 列做 dot product，再加第 j 个 bias。注意是 <code>b[j]</code>：bias 对应输出特征，而不是输入行/token。</p>
+
+    <h3>在 LLM 中</h3>
+    <pre>hidden_states: [seq, hidden]
+Wq:            [hidden, q_dim]
+Q:             [seq, q_dim]</pre>
+    <p>Linear 独立处理每个 token 的 hidden vector，改变特征维，但不会在 token 之间交换信息。token 之间的信息混合发生在后面的 Attention。</p>
+  </section>
+
+  <section id="practice">
+    <h2>3. 先闭卷预测，再点击检查</h2>
+    <div class="card">
+      <p><code>X:[5,128]</code>，<code>W:[128,64]</code>，<code>b:[64]</code></p>
+      <label for="shape">输出 shape（写成 5,64）</label>
+      <input id="shape" autocomplete="off">
+      <label for="bias">Y[2,7] 使用 b 的哪个元素？（写成 b[?]）</label>
+      <input id="bias" autocomplete="off">
+      <button onclick="checkQuick()">检查</button>
+      <div id="quick-result" class="result" aria-live="polite"></div>
+    </div>
+
+    <div class="card warning"><strong>常见错误：</strong>写成 <code>W[j,k]</code> 是把 W 当作已经转置；写成 <code>b[i]</code> 是把 bias 错绑到 token。后续 Q/K/V、FFN、LM Head 都会重复使用这一索引模式。</div>
+  </section>
+
+  <section id="assignment">
+    <h2>4. 可运行作业</h2>
+    <p>打开 <a href="../exercises/0001_tensor_linear.py">练习代码</a>，只实现三个标有 TODO 的函数。不要使用 NumPy、PyTorch 或第三方库。</p>
+    <pre>conda activate llm
+python exercises/0001_tensor_linear.py</pre>
+    <p>成功标志：</p>
+    <pre>Lesson 0001: all 8 checks passed.</pre>
+    <p>通过代码测试后，关闭本页与速查表，完成 <a href="../assessments/0001-tensor-shape-to-linear.md">闭卷过关测试</a>。</p>
+  </section>
+
+  <section>
+    <h2>5. 提交后发生什么</h2>
+    <p>把程序输出和 7 道答案发给 Codex。我会分别检查概念、shape、实现和迁移能力：</p>
+    <ul><li>通过：生成第 0002 课——reshape、transpose 与 head layout。</li><li>局部问题：生成一个短补强课，只修正对应断层。</li><li>根本误解：换更小矩阵重讲并重新测试。</li></ul>
+    <p><strong>有任何地方不清楚，随时向 Codex 追问。</strong>追问不会影响评分；闭卷测试时再独立作答。</p>
+  </section>
+</main>
+<footer>Mission: 从嵌入式 C++ 工程转向 On-device LLM / ML Runtime，并完成 Qwen3.5-4B 的 LiteRT-LM Android 移植。</footer>
+<script>
+  function checkQuick(){
+    const shape=document.getElementById('shape').value.replace(/[\[\]\s×x*]/g,'').toLowerCase();
+    const bias=document.getElementById('bias').value.replace(/\s/g,'').toLowerCase();
+    const okShape=shape==='5,64';
+    const okBias=bias==='b[7]'||bias==='7';
+    document.getElementById('quick-result').textContent=(okShape&&okBias)?'正确：token 维保留，输出特征变为 64，bias 使用 b[7]。':`再检查：shape ${okShape?'正确':'不正确'}；bias ${okBias?'正确':'不正确'}。`;
+  }
+</script>
+</body></html>

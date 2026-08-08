@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tensor Shape 速查表</title>
+  <style>
+    :root{--ink:#17202a;--muted:#607080;--paper:#fbfaf6;--accent:#186c73;--line:#d9ddd8}
+    *{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,"Noto Serif SC",serif}
+    main{max-width:900px;margin:auto;padding:54px 28px 80px} h1{font-size:2.2rem;margin:0 0 .2em} h2{margin-top:2em;border-top:1px solid var(--line);padding-top:.7em}
+    .lede{color:var(--muted);font-size:1.08rem} code{font-family:Consolas,monospace;background:#edf3f1;padding:.1em .35em;border-radius:4px}
+    table{width:100%;border-collapse:collapse;margin:1em 0} th,td{text-align:left;padding:.7em;border-bottom:1px solid var(--line);vertical-align:top}
+    .rule{border-left:4px solid var(--accent);padding:.6em 1em;background:#eef6f4} @media print{body{background:white}main{padding:20px}}
+  </style>
+</head>
+<body><main>
+  <h1>Tensor Shape 速查表</h1>
+  <p class="lede">第 0001～0002 课参考。先给每个轴命名，再做任何 reshape、transpose 或 matmul。</p>
+
+  <h2>矩阵乘法</h2>
+  <p class="rule"><code>[M,K] @ [K,N] -> [M,N]</code>。两个 K 必须相等；K 是被求和并消失的维度。</p>
+  <p><code>Y[i,j] = Σₖ X[i,k] × W[k,j] + b[j]</code></p>
+
+  <table>
+    <thead><tr><th>模型写法</th><th>含义</th><th>Linear 后</th></tr></thead>
+    <tbody>
+      <tr><td><code>[seq, hidden]</code></td><td>每行一个 token</td><td><code>[seq, out]</code></td></tr>
+      <tr><td><code>[batch, seq, hidden]</code></td><td>多个序列</td><td><code>[batch, seq, out]</code></td></tr>
+      <tr><td><code>[B,S,N,D]</code></td><td>N 个 head，每个 D 维</td><td>常转为 <code>[B,N,S,D]</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>广播</h2>
+  <p><code>[M,N] + [N]</code>：同一个长度 N 的向量加到每一行。对 Linear 而言，每个输出特征 j 使用 <code>b[j]</code>。</p>
+
+  <h2>三个自检问题</h2>
+  <ol>
+    <li>哪个维度代表 token？</li>
+    <li>哪个维度被权重矩阵改变？</li>
+    <li>哪个维度在乘法中被求和并消失？</li>
+  </ol>
+
+  <p><a href="../lessons/0001-tensor-shape-to-linear.html">返回第 0001 课</a></p>
+</main></body></html>

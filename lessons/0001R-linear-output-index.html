@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0001R：为什么 Linear 的 bias 是 b[j]</title>
+  <style>
+    :root{--paper:#fbfaf6;--ink:#192329;--muted:#65737a;--accent:#9b4a2f;--blue:#176b70;--line:#d9ddd8;--card:#fff}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.7 Georgia,"Noto Serif SC",serif}
+    main{max-width:900px;margin:auto;padding:54px 28px 80px}h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.08;margin:.2em 0}.lede{color:var(--muted);font-size:1.12rem}
+    section{border-top:1px solid var(--line);padding:28px 0}code,pre{font-family:Consolas,monospace}code{background:#edf3f1;padding:.1em .35em;border-radius:4px}pre{background:#17262c;color:#eef5f2;padding:20px;border-radius:10px;overflow:auto}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0}.rule{border-left:5px solid var(--accent);background:#fff1e9}.ok{border-left:5px solid var(--blue);background:#edf7f4}
+    table{width:100%;border-collapse:collapse}th,td{padding:.65em;text-align:center;border-bottom:1px solid var(--line)}.i{color:#8b3a26;font-weight:700}.j{color:#075f67;font-weight:700}a{color:var(--blue)}
+  </style>
+</head>
+<body><main>
+  <p><strong>补强课 0001R · 20～30 分钟</strong></p>
+  <h1>为什么 Linear 的 bias 是 <code>b[j]</code></h1>
+  <p class="lede">你的程序已经正确使用 <code>b[j]</code>，但闭卷公式和 Debug 题都写成了 <code>b[i]</code>。这说明问题不在 Python，而在“输出行”和“输出特征”尚未稳定绑定。</p>
+
+  <section>
+    <h2>只记一个对象：Y[i,j]</h2>
+    <div class="card rule">
+      <p><span class="i">i</span> 选择输出的哪一行：在 LLM 里通常是哪个 token。</p>
+      <p><span class="j">j</span> 选择输出的哪一列：也就是哪个输出特征。</p>
+      <p>bias 每个输出特征一个，因此使用 <code>b[<span class="j">j</span>]</code>。</p>
+    </div>
+    <pre>Y[i,j] = X[i,0]×W[0,j]
+       + X[i,1]×W[1,j]
+       + ...
+       + X[i,K-1]×W[K-1,j]
+       + b[j]</pre>
+    <p>改变 i：换一个 token，但仍计算同一个输出特征 j。改变 j：换一个输出特征，因此 bias 也必须跟着 j 改变。</p>
+  </section>
+
+  <section>
+    <h2>逐元素手算，而不是整块猜答案</h2>
+    <pre>X = [[1, 2],       W = [[1, 0],       b = [10, 20]
+     [3, 4]]            [0, 2]]</pre>
+    <table>
+      <tr><th>元素</th><th>dot product</th><th>bias</th><th>结果</th></tr>
+      <tr><td>Y[0,0]</td><td>1×1 + 2×0</td><td>+ b[0] = 10</td><td>11</td></tr>
+      <tr><td>Y[0,1]</td><td>1×0 + 2×2</td><td>+ b[1] = 20</td><td>24</td></tr>
+      <tr><td>Y[1,0]</td><td>3×1 + 4×0</td><td>+ b[0] = 10</td><td>13</td></tr>
+      <tr><td>Y[1,1]</td><td>3×0 + 4×2</td><td>+ b[1] = 20</td><td>28</td></tr>
+    </table>
+    <div class="card ok"><strong>自检：</strong>同一列的所有输出都加同一个 bias；同一行的不同列通常加不同 bias。</div>
+  </section>
+
+  <section>
+    <h2>为什么代码对、闭卷却错</h2>
+    <p>你的代码通过 <code>j</code> 取 W 的第 j 列，随后正确写了 <code>+ b[j]</code>。但旁边注释和闭卷答案写成 <code>b[i]</code>。这类“代码流畅、索引心智模型不稳定”的问题在 Q/K/V reshape、KV Cache update 中会放大，所以现在修正很划算。</p>
+    <p>回到练习代码，把错误注释也改成：</p>
+    <pre># x[i,:] · w[:,j] + b[j]</pre>
+  </section>
+
+  <section>
+    <h2>闭卷短测</h2>
+    <p>现在关闭本页，不看速查表，完成 <a href="../assessments/0001R-linear-output-index.md">0001R 四题短测</a>。四题全对即通过第 0001 课并进入 reshape/transpose。</p>
+    <p>有不清楚的地方可以先问 Codex；理解后再闭卷作答。</p>
+  </section>
+</main></body></html>
