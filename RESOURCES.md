@@ -4,11 +4,11 @@
 
 - [PyTorch Learn the Basics](https://docs.pytorch.org/tutorials/beginner/basics/intro.html)
   官方入门系列。使用范围：Tensors、Build Model、Autograd、Optimization；跳过 Datasets、DataLoaders、Transforms 和完整 FashionMNIST 项目。
-- [PyTorch Tensors](https://docs.pytorch.org/tutorials/beginner/basics/tensor_tutorial.html)
+- [PyTorch Tensors](https://docs.pytorch.org/tutorials/beginner/basics/tensorqs_tutorial.html)
   用于补齐 shape、indexing、reshape、transpose、dtype、device 和广播；阶段 1 的主资料。
 - [PyTorch Build the Neural Network](https://docs.pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html)
   用于 `nn.Module`、子模块、参数与 `forward`；只读与最小 decoder 相关部分。
-- [PyTorch Autograd](https://docs.pytorch.org/tutorials/beginner/basics/autograd_tutorial.html)
+- [PyTorch Autograd](https://docs.pytorch.org/tutorials/beginner/basics/autogradqs_tutorial.html)
   用于计算图、参数梯度和推理模式；完成一次微型训练后停止深入。
 - [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
   Transformer 原始论文。只精读 3.1、3.2、3.4、3.5；训练实验、翻译指标和大部分附录暂时跳过。

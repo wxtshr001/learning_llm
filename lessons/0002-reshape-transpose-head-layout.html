@@ -1,14 +1,197 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>第 0002 课：reshape、transpose 与 Head Layout</title>
-<style>:root{--p:#fbfaf6;--i:#17232a;--m:#63727b;--a:#176b70;--o:#d98242;--l:#d7ddd8;--c:#fff}*{box-sizing:border-box}body{margin:0;background:var(--p);color:var(--i);font:17px/1.72 Georgia,"Noto Serif SC",serif}header,main,footer{max-width:940px;margin:auto;padding-left:28px;padding-right:28px}header{padding-top:58px;padding-bottom:30px}.eyebrow{font:700 .78rem system-ui;letter-spacing:.14em;color:var(--a)}h1{font-size:clamp(2.1rem,5vw,3.8rem);line-height:1.07;margin:.25em 0}.lede{max-width:760px;color:var(--m);font-size:1.13rem}section{border-top:1px solid var(--l);padding:28px 0}code,pre{font-family:Consolas,monospace}code{background:#eaf2ef;padding:.1em .35em;border-radius:4px}pre{background:#17262c;color:#eef5f2;padding:20px;border-radius:10px;overflow:auto}.card{background:var(--c);border:1px solid var(--l);border-radius:11px;padding:20px;margin:16px 0}.goal{border-left:5px solid var(--a);background:#edf7f4}.warn{border-left:5px solid var(--o);background:#fff4e9}.flow{text-align:center;font-size:1.12rem;line-height:2.2}table{width:100%;border-collapse:collapse}th,td{padding:.65em;text-align:left;border-bottom:1px solid var(--l)}a{color:var(--a)}footer{padding-top:25px;padding-bottom:70px;color:var(--m)}</style></head>
-<body><header><div class="eyebrow">ON-DEVICE LLM SYSTEMS · LESSON 0002</div><h1>reshape、transpose 与 Head Layout</h1><p class="lede">Linear 把每个 token 投影为一条长向量；Attention 需要把它拆成多个 head。今天建立从元素索引到内存布局的完整映射。</p></header>
-<main><section><div class="card goal"><strong>本课成果：</strong>使用 PyTorch 完成 `[B,S,H] → [B,N,S,D] → [B,S,H]` 可逆变换；解释每个轴、元素映射、stride 与 contiguous 边界。</div></section>
-<section><h2>1. 指定资料，只读相关部分</h2><ol><li><a href="https://docs.pytorch.org/tutorials/beginner/basics/tensor_tutorial.html">PyTorch Tensors</a>：Attributes、indexing、operations。</li><li><a href="https://docs.pytorch.org/docs/stable/generated/torch.reshape.html">torch.reshape</a>：看元素总数、`-1` 与 view/copy 说明。</li><li><a href="https://docs.pytorch.org/docs/main/tensor_view.html">Tensor Views</a>：只看 transpose 可能 non-contiguous，以及 reshape 可能 view 或 copy。</li></ol><p>不要展开学习全部 Tensor API。</p></section>
-<section><h2>2. hidden 不是凭空变成 heads</h2><div class="flow"><code>[B,S,H]</code><br>H = N × D<br>↓ reshape<br><code>[B,S,N,D]</code><br>↓ transpose(1,2)<br><code>[B,N,S,D]</code></div><p>reshape 只把原来 hidden 轴中的连续区间重新解释为“第几个 head”和“head 内第几个特征”。元素映射为：</p><div class="card"><code>heads[b,n,s,d] = projected[b,s,n*D+d]</code></div><p>B、S 的长度不变；H 被拆成 N×D；transpose 只交换 S 与 N 的位置，任何轴长度都没有被数值改变。</p></section>
-<section><h2>3. 为什么 Attention 使用 [B,N,S,D]</h2><p>对每个 batch、每个 head，需要计算：</p><pre>Q[b,n,:,:] @ K[b,n,:,:].T  -> [S,S]</pre><p>把 N 放在矩阵乘法的两个末尾维度 S、D 之前，PyTorch 就可以把 B、N 当作 batch 维，对所有 head 并行执行 batched matmul。</p></section>
-<section><h2>4. shape 相同，不代表内存顺序相同</h2><p><code>transpose</code> 通常不搬数据，只改变 stride，让新索引映射到原 storage。结果往往 non-contiguous。</p><table><tr><th>操作</th><th>承诺</th></tr><tr><td><code>view</code></td><td>必须能用现有 shape/stride 解释同一 storage，否则失败</td></tr><tr><td><code>reshape</code></td><td>返回目标 shape；能 view 就 view，否则可能复制</td></tr><tr><td><code>contiguous()</code></td><td>按当前逻辑顺序生成连续布局</td></tr></table><div class="card warn">在 merge heads 时，常用 <code>x.transpose(1,2).contiguous().view(B,S,N*D)</code>。这里 contiguous 不是数学要求，而是 storage/stride 要求。</div></section>
-<section><h2>5. 作业</h2><p>实现 <a href="../exercises/0002_head_layout.py">0002_head_layout.py</a> 中的两个 TODO：</p><pre>conda activate llm
-python exercises/0002_head_layout.py</pre><p>你必须看到 <code>all 11 checks passed</code>，并观察 split stride 与 restored contiguous。</p></section>
-<section><h2>6. 门禁</h2><p>完成代码后，关闭本页与 <a href="../reference/0002-head-layout-cheatsheet.html">Head Layout 速查表</a>，回答 <a href="../assessments/0002-reshape-transpose-head-layout.md">第 0002 课闭卷测试</a>。</p><p><strong>不清楚时先问 Codex；理解后再闭卷。</strong></p></section></main>
-<footer>下一能力节点：PyTorch Tensor、dtype/device 与 CPU/CUDA parity。</footer></body></html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>第 0002 课：从三维 Tensor 到 Attention Head</title>
+  <style>
+    :root{--paper:#fbfaf6;--ink:#17232a;--muted:#63727b;--teal:#176b70;--orange:#c86d31;--blue:#345f91;--line:#d7ddd8;--card:#fff;--code:#17262c}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.75 Georgia,"Noto Serif SC",serif}
+    header,main,footer{max-width:980px;margin:auto;padding-left:30px;padding-right:30px}header{padding-top:58px;padding-bottom:34px}.eyebrow{font:700 .78rem system-ui;letter-spacing:.14em;color:var(--teal)}
+    h1{font-size:clamp(2.1rem,5vw,3.9rem);line-height:1.07;margin:.25em 0}.lede{max-width:800px;color:var(--muted);font-size:1.15rem}h2{font-size:1.75rem;margin:.2em 0 .55em}h3{margin-top:1.6em}
+    section{border-top:1px solid var(--line);padding:32px 0}code,pre{font-family:Consolas,"SFMono-Regular",monospace}code{background:#eaf2ef;padding:.1em .35em;border-radius:4px}pre{background:var(--code);color:#eef5f2;padding:20px;border-radius:10px;overflow:auto;line-height:1.55}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin:17px 0}.goal{border-left:5px solid var(--teal);background:#edf7f4}.warn{border-left:5px solid var(--orange);background:#fff4e9}.note{border-left:5px solid var(--blue);background:#eef4fb}
+    .flow{text-align:center;font-size:1.12rem;line-height:2.25}.axis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:18px 0}.axis div{background:white;border:1px solid var(--line);border-radius:10px;padding:15px}
+    table{width:100%;border-collapse:collapse;margin:1em 0}th,td{padding:.7em;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{font-family:system-ui;font-size:.88rem;color:var(--muted)}
+    .b{color:#8c3f28}.s{color:#176b70}.n{color:#345f91}.d{color:#7a4d99}.h{color:#9a6b00}.check{font-weight:700;color:var(--teal)}a{color:var(--teal)}footer{padding-top:25px;padding-bottom:70px;color:var(--muted)}
+  </style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">ON-DEVICE LLM SYSTEMS · LESSON 0002 · REVISED</div>
+  <h1>从三维 Tensor 到 Attention Head</h1>
+  <p class="lede">第 0001 课里，你处理的是一行一个 token 的二维矩阵。本课只增加两件事：一次同时处理多个序列，以及把每个 token 的长向量拆成多个较短的 head。所有字母先定义，再使用。</p>
+</header>
+<main>
+  <section>
+    <div class="card goal"><strong>本课完成标准：</strong>看到 <code>[B,S,H]</code> 时能说出每个轴；能把它变成 <code>[B,N,S,D]</code>；能追踪一个具体元素在 reshape/transpose 前后的索引；能解释为什么 merge 前常用 <code>contiguous()</code>。</div>
+    <p>预计时间：讲解与探索 40～60 分钟，代码作业 30～60 分钟，闭卷测试 20 分钟。</p>
+  </section>
+
+  <section id="symbols">
+    <h2>1. 先把五个字母说清楚</h2>
+    <p>这些字母只是为了少写长单词，不是新数学。每次使用时都应能换回中文含义。</p>
+    <div class="axis">
+      <div><strong class="b">B = Batch</strong><br>一次同时处理多少条序列。</div>
+      <div><strong class="s">S = Sequence length</strong><br>每条序列中有多少个 token。</div>
+      <div><strong class="h">H = Hidden size</strong><br>每个 token 用多少个数表示。</div>
+      <div><strong class="n">N = Number of heads</strong><br>Attention 被分成多少个 head。</div>
+      <div><strong class="d">D = Head dimension</strong><br>每个 head 分到多少个特征。</div>
+    </div>
+    <p>它们满足：</p>
+    <div class="card"><code>H = N × D</code>，所以 <code>D = H ÷ N</code>。</div>
+    <p>例如 hidden size 是 8，分成 2 个 head，那么每个 head 有 4 个特征：</p>
+    <pre>H = 8
+N = 2
+D = H / N = 4</pre>
+    <div class="card warn"><strong>注意：</strong>head 不是新增 8 个数。原来的 8 个 hidden 特征被重新分组为 2 组，每组 4 个；元素总数不变。</div>
+  </section>
+
+  <section id="rank-axis">
+    <h2>2. shape、rank、axis/dim 分别是什么</h2>
+    <p>假设一个 tensor 的 shape 为 <code>[2,3,8]</code>：</p>
+    <table>
+      <tr><th>术语</th><th>这里的含义</th></tr>
+      <tr><td>shape</td><td><code>[2,3,8]</code>，每个轴的长度。</td></tr>
+      <tr><td>rank / ndim</td><td>3，因为有三个轴。这里不是矩阵秩。</td></tr>
+      <tr><td>axis / dim 0</td><td>第一个轴，长度 2，本课表示 Batch。</td></tr>
+      <tr><td>axis / dim 1</td><td>第二个轴，长度 3，本课表示 Sequence。</td></tr>
+      <tr><td>axis / dim 2</td><td>第三个轴，长度 8，本课表示 Hidden。</td></tr>
+    </table>
+    <p>所以：</p>
+    <pre>x.shape = [B=2, S=3, H=8]
+
+x[0, 1, 6]
+│  │  └─ 第 6 个 hidden 特征
+│  └──── 第 1 个 token
+└─────── 第 0 条序列</pre>
+    <p>Python 从 0 开始计数，因此“第 1 个 token”在自然语言里也可能被称为第二个 token。后续为了避免歧义，一律写“下标 1”。</p>
+  </section>
+
+  <section id="concrete">
+    <h2>3. 用具体数字看 reshape</h2>
+    <p>先只看一条序列：<code>B=1</code>。序列有 3 个 token，每个 token 有 8 个 hidden 特征：</p>
+    <pre>x.shape = [1, 3, 8]
+
+token 下标 0: [ 0,  1,  2,  3,  4,  5,  6,  7]
+token 下标 1: [ 8,  9, 10, 11, 12, 13, 14, 15]
+token 下标 2: [16, 17, 18, 19, 20, 21, 22, 23]</pre>
+    <p>现在令 <code>N=2</code>，因此 <code>D=4</code>。把最后一个长度 8 的轴拆成 2×4：</p>
+    <pre>reshaped = x.reshape(B=1, S=3, N=2, D=4)
+reshaped.shape = [1, 3, 2, 4]
+
+token 0:
+  head 0: [0, 1, 2, 3]
+  head 1: [4, 5, 6, 7]
+
+token 1:
+  head 0: [8, 9, 10, 11]
+  head 1: [12, 13, 14, 15]</pre>
+    <p><code>reshape</code> 没有改变数值顺序，只是把原来的 hidden 下标拆成：</p>
+    <pre>hidden_index = head_index × head_dim + index_inside_head
+
+例如 hidden_index 6:
+6 = 1 × 4 + 2
+所以它属于 head 下标 1，在这个 head 内的下标是 2。</pre>
+    <p class="check">因此：<code>reshaped[0,0,1,2] == x[0,0,6] == 6</code>。</p>
+  </section>
+
+  <section id="transpose">
+    <h2>4. transpose 只交换轴的位置</h2>
+    <p>reshape 后的轴顺序是：</p>
+    <pre>dim 0 = B = Batch
+dim 1 = S = Sequence
+dim 2 = N = Heads
+dim 3 = D = Head dimension
+
+shape = [B,S,N,D] = [1,3,2,4]</pre>
+    <p>执行 <code>transpose(1,2)</code>，意思是交换 dim 1 与 dim 2：</p>
+    <pre>heads = reshaped.transpose(1, 2)
+
+交换前: [B, S, N, D] = [1, 3, 2, 4]
+交换后: [B, N, S, D] = [1, 2, 3, 4]</pre>
+    <p>任何轴的长度都没有“计算出新值”；只是长度 3 的 Sequence 轴和长度 2 的 Head 轴互换位置。</p>
+    <p>元素映射也只是换索引顺序：</p>
+    <div class="card"><code>heads[b,n,s,d] = reshaped[b,s,n,d] = x[b,s,n×D+d]</code></div>
+    <p>例如：</p>
+    <pre>heads[0,1,0,2]
+= reshaped[0,0,1,2]
+= x[0,0,6]
+= 6</pre>
+  </section>
+
+  <section id="why-layout">
+    <h2>5. 为什么 Attention 喜欢 [B,N,S,D]</h2>
+    <p>现在先不学习 Attention 公式，只看组织方式。对某一个 batch、某一个 head，我们希望拿到“所有 token 在这个 head 中的向量”：</p>
+    <pre>heads[b, n, :, :]
+
+shape = [S, D]
+含义 = 这一条序列的所有 token，每个 token 只保留当前 head 的 D 个特征</pre>
+    <p>以后单个 head 的 Q 和 K 会进行：</p>
+    <pre>Q_head: [S,D]
+K_head: [S,D]
+Q_head @ K_head.transpose(-2,-1): [S,S]</pre>
+    <p>把 B、N 放在前面，就能把它们当成两层“批次”，让 PyTorch 同时计算所有 batch 的所有 head。你现在只需掌握 layout，不需要提前理解完整 Attention。</p>
+  </section>
+
+  <section id="stride">
+    <h2>6. stride 与 contiguous：先用 C++ 内存理解</h2>
+    <p>你有 C++/系统经验，可以把 tensor 想成：</p>
+    <ul><li>一块线性 storage；</li><li>一个 shape，说明每个轴有多长；</li><li>一个 stride，说明某个轴的下标增加 1 时，在线性 storage 中跳过多少个元素。</li></ul>
+    <p>连续的 <code>[2,3,4]</code> tensor 通常有 stride：</p>
+    <pre>shape  = [2, 3, 4]
+stride = [12, 4, 1]
+
+offset(i,j,k) = i×12 + j×4 + k×1</pre>
+    <p>执行 <code>transpose(1,2)</code> 后，storage 通常没有搬动，只交换 shape 与 stride 的解释：</p>
+    <pre>shape  = [2, 4, 3]
+stride = [12, 1, 4]</pre>
+    <p>这时逻辑索引仍正确，但数据不再按最后一维连续排列，所以 tensor 通常是 non-contiguous。</p>
+    <table>
+      <tr><th>API</th><th>本课需要记住的行为</th></tr>
+      <tr><td><code>view(new_shape)</code></td><td>只改解释，不复制；因此要求当前 stride 能支持新 shape，否则报错。</td></tr>
+      <tr><td><code>reshape(new_shape)</code></td><td>保证给出目标 shape；能共享 storage 就共享，不能时可能复制。不要依赖它一定复制或一定不复制。</td></tr>
+      <tr><td><code>contiguous()</code></td><td>按当前逻辑顺序整理出连续 storage，然后可安全使用常规 view。</td></tr>
+    </table>
+    <div class="card note"><strong>当前门槛：</strong>你不需要手算复杂 stride；只需能解释为什么 transpose 后直接 view 可能失败，以及为什么 <code>contiguous().view(...)</code> 能工作。</div>
+  </section>
+
+  <section id="explore">
+    <h2>7. 先运行探索脚本，不要立刻做作业</h2>
+    <p>探索脚本已经写好，没有 TODO。它会打印具体数值、shape、stride 与元素映射：</p>
+    <pre>conda activate llm
+python exercises/0002_explore_head_layout.py</pre>
+    <p>运行时逐行核对：</p>
+    <ol><li><code>x[0,0]</code> 如何拆成两个 head；</li><li><code>heads[0,1,0,2]</code> 是否等于 <code>x[0,0,6]</code>；</li><li>transpose 前后 data pointer 是否相同；</li><li>为什么 transpose 后 contiguous 变为 False。</li></ol>
+  </section>
+
+  <section id="sources">
+    <h2>8. 再用官方资料验证</h2>
+    <p>本页已经提供完成作业所需的主讲解。官方资料用于验证，不要求你自己从文档拼出课程：</p>
+    <ol>
+      <li><a href="https://docs.pytorch.org/tutorials/beginner/basics/tensorqs_tutorial.html">PyTorch Tensors</a>：只看 “Attributes of a Tensor” 与 “Operations on Tensors” 中的 indexing。</li>
+      <li><a href="https://docs.pytorch.org/docs/stable/generated/torch.reshape.html">torch.reshape</a>：只看元素数量不变、<code>-1</code>、以及 view/copy 说明。</li>
+      <li><a href="https://docs.pytorch.org/docs/main/tensor_view.html">Tensor Views</a>：只找 “transpose may produce a non-contiguous tensor” 与 reshape/view 的区别。</li>
+    </ol>
+    <p>以上三个地址已在 2026-08-08 实际请求并返回 HTTP 200。</p>
+  </section>
+
+  <section id="assignment">
+    <h2>9. 再做代码作业</h2>
+    <p>打开 <a href="../exercises/0002_head_layout.py">0002_head_layout.py</a>，只实现两个 TODO。</p>
+    <h3>split_heads 的思考顺序</h3>
+    <ol><li>确认 x 有三个轴：<code>[B,S,H]</code>。</li><li>读取 B、S、H。</li><li>确认 H 能被 N 整除，计算 D。</li><li>reshape 为 <code>[B,S,N,D]</code>。</li><li>交换 S 与 N，得到 <code>[B,N,S,D]</code>。</li></ol>
+    <h3>merge_heads 的思考顺序</h3>
+    <ol><li>输入为 <code>[B,N,S,D]</code>。</li><li>交换 N 与 S，回到 <code>[B,S,N,D]</code>。</li><li>整理为 contiguous。</li><li>把 N 与 D 合并为 H=N×D，得到 <code>[B,S,H]</code>。</li></ol>
+    <pre>python exercises/0002_head_layout.py</pre>
+    <p>成功标志是 <code>Lesson 0002: all 11 checks passed.</code></p>
+  </section>
+
+  <section id="gate">
+    <h2>10. 闭卷门禁</h2>
+    <p>代码通过后，关闭本页和 <a href="../reference/0002-head-layout-cheatsheet.html">详细速查表</a>，完成 <a href="../assessments/0002-reshape-transpose-head-layout.md">第 0002 课过关测试</a>。</p>
+    <p><strong>如果某一步仍不清楚，先问 Codex，不要靠猜完成 TODO。</strong>理解后再闭卷测试。</p>
+  </section>
+</main>
+<footer>与主项目的关系：Q、K、V projection 后都会经历类似 head split；KV Cache 的 shape 也会直接使用 B、N、S、D。</footer>
+</body></html>

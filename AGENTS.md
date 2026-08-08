@@ -5,7 +5,7 @@
 ## 每次会话开始
 
 1. 执行 `git pull --ff-only origin main`，不得在旧状态上评分或生成课程。
-2. 依次阅读 `HANDOFF.md`、`CURRENT-STATE.md`、`progress.json`、`MISSION.md`、`COURSE-PROTOCOL.md`。
+2. 依次阅读 `HANDOFF.md`、`CURRENT-STATE.md`、`progress.json`、`MISSION.md`、`LEARNER-PROFILE.md`、`COURSE-PROTOCOL.md`。
 3. 阅读 `progress.json.current` 指向的 lesson、exercise、assessment、submission，以及最近相关的 feedback 和 learning record。
 4. 不重复已在 `learning-records/` 中由证据证明的内容；用间隔检索题复习即可。
 5. 不直接相信旧材料对能力的乐观判断；以答卷、代码、解释和测试输出为证据。
@@ -17,6 +17,21 @@
 - 未通过关键题时，不生成正常编号的下一课；生成 `NNNNR` 补强课或短测。
 - 通过后才更新 `learning-records/`，并生成下一课。
 - 避免长篇即时纠错；先判断断层是概念、数学、shape、Python、PyTorch 还是 Runtime。
+
+## 新课程生成门禁
+
+创建或重写 lesson 前，必须逐项满足；任何一项不满足都不得交付：
+
+1. 从 `LEARNER-PROFILE.md` 和最近答卷列出本课可以依赖、不能依赖的知识，不凭课程编号推测能力。
+2. 首次出现的字母、缩写、符号和 API 必须立即用中文解释；tensor 必须同时解释 rank、每个 axis 的含义及 shape 中各数字的来源。
+3. 抽象公式前先给一个可逐元素追踪的小数字例子；涉及 layout 时必须展示至少一个元素在变换前后的索引映射。
+4. 新概念必须连接到学习者已掌握的知识。本学习者优先使用 C++ 连续内存、数组索引、指针和系统执行路径作类比，但必须说明类比的边界。
+5. 区分“已完成示范”和“独立作业”：先提供可运行的探索脚本，再提供不含完整答案的 TODO 作业。
+6. 闭卷题必须使用不同数字或 shape，且覆盖“含义、计算、实现、迁移”；不能只让学习者复述正文。
+7. 实际运行课程脚本和测试。所有外部链接必须发起 HTTP 请求验证，不能只检查 URL 拼写；使用 `python tools/validate_course.py --external`。
+8. 最后用初学者视角检查：读者不打开外部资料，也能理解作业中的全部符号和要求。官方资料是证据与延伸阅读，不是弥补正文缺失的前置教材。
+
+如果学习者反馈“看不懂”或指出未解释符号，默认判定为课程设计未通过，而不是学习者未通过；先降低抽象层级并重写课程，再继续门禁流程。
 
 ## 每次评分或课程更新后
 

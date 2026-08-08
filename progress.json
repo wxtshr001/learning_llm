@@ -2,7 +2,7 @@
   "schema_version": 1,
   "updated_at": "2026-08-08",
   "mission": "On-device LLM Systems",
-  "repository": "https://github.com/wxtshr001/learning_llm",
+  "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
     "lesson_id": "0002",
     "title": "reshape, transpose, head layout, and contiguous/view boundaries",
