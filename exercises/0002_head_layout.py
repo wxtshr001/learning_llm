@@ -3,7 +3,7 @@
 Prerequisite:
     First run exercises/0002_explore_head_layout.py and understand its output.
 
-Run from F:\\learn\\llm:
+Run from the repository root:
     conda activate llm
     python exercises/0002_head_layout.py
 
@@ -41,7 +41,12 @@ def split_heads(x: torch.Tensor, num_heads: int) -> torch.Tensor:
     # 5. Compute D = H // num_heads.
     # 6. Reshape [B, S, H] -> [B, S, N, D].
     # 7. Transpose dim 1 and dim 2 -> [B, N, S, D].
-    raise NotImplementedError
+    B, S, H = x.shape
+    if H % num_heads != 0:
+        raise ValueError("Not a valid")
+    D = H // num_heads
+    ret = x.reshape(B, S, num_heads, D).transpose(1, 2)
+    return ret
 
 
 def merge_heads(x: torch.Tensor) -> torch.Tensor:
@@ -55,14 +60,14 @@ def merge_heads(x: torch.Tensor) -> torch.Tensor:
     # 3. Transpose dim 1 and dim 2 -> [B, S, N, D].
     # 4. Make that tensor contiguous because transpose usually changes strides.
     # 5. Merge N and D -> H=N*D, producing [B, S, H].
-    raise NotImplementedError
+    B, N, S, D = x.shape
+    ret = x.transpose(1, 2).contiguous().view(B, S, N*D)
+    return ret
+
 
 
 def run_tests() -> None:
-    if not torch.cuda.is_available():
-        raise RuntimeError("This lesson expects the configured CUDA environment")
-
-    device = torch.device("cuda")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Concrete test dimensions:
     # B=2 sequences, S=3 tokens, H=8 total features per token.
@@ -71,7 +76,7 @@ def run_tests() -> None:
 
     heads = split_heads(x, num_heads=2)
     assert heads.shape == (2, 2, 3, 4)  # [B=2, N=2, S=3, D=4]
-    assert heads.device.type == "cuda"
+    assert heads.device == device
     assert heads.dtype == torch.float32
 
     # General mapping: heads[b,n,s,d] == x[b,s,n*D+d].

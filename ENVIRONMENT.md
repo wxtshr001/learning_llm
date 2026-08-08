@@ -28,6 +28,8 @@ python -m pip install -r requirements-pytorch-cu126.txt
 
 CUDA 12.6 wheel 适用于当前 Windows/NVIDIA 环境。另一台机器如果没有 NVIDIA GPU或驱动不兼容，应根据 PyTorch 官方安装页选择对应 wheel；本机差异不得改写共享学习进度。
 
+第 0002 课提交的运行输出显示该次练习使用 CPU；这只证明该次 PyTorch 进程的 device，不据此推断主机硬件。0002 探索与作业脚本现按 `torch.cuda.is_available()` 选择 CUDA 或 CPU，使 layout 结论不依赖某一种设备。
+
 ## 安装决策
 
 PyTorch 2.6 起不再发布新的官方 Conda channel 二进制包。因此使用 Conda 管理隔离环境，并在环境内安装 PyTorch 官方 CUDA wheel；NumPy 等通用数值依赖由 Conda 管理。

@@ -1,26 +1,26 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-08",
+  "updated_at": "2026-08-09",
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0002",
-    "title": "reshape, transpose, head layout, and contiguous/view boundaries",
+    "lesson_id": "0002R",
+    "title": "direct head-index mapping and Q/K/V layout transfer",
     "status": "awaiting_submission",
-    "lesson": "lessons/0002-reshape-transpose-head-layout.html",
-    "exercise": "exercises/0002_head_layout.py",
-    "assessment": "assessments/0002-reshape-transpose-head-layout.md",
-    "submission": "submissions/0002.md"
+    "lesson": "lessons/0002R-index-and-qkv-layout.html",
+    "exercise": "exercises/0002R_trace_qkv_layout.py",
+    "assessment": "assessments/0002R-index-and-qkv-layout.md",
+    "submission": "submissions/0002R.md"
   },
   "completed_lessons": ["0001"],
   "completed_remediation": ["0001R", "0001R2"],
   "next_normal_lesson": "0003",
   "gate": {
     "minimum_score": 80,
-    "critical_items": ["code", "question_1", "question_2", "question_3", "question_7"]
+    "critical_items": ["code", "question_1", "question_2", "question_3"]
   },
   "last_verified_evidence": [
-    "learning-records/0003-linear-shape-and-calculation-passed.md",
-    "submissions/0001R2-feedback.md"
+    "submissions/0002-feedback.md",
+    "learning-records/0004-head-layout-partial-remediation-required.md"
   ]
 }

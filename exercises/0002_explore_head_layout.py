@@ -2,7 +2,7 @@
 
 This file is a guided demonstration, not homework. Read the output slowly.
 
-Run from F:\\learn\\llm:
+Run from the repository root:
     conda activate llm
     python exercises/0002_explore_head_layout.py
 """
@@ -23,10 +23,7 @@ def describe(name: str, tensor: torch.Tensor) -> None:
 
 
 def main() -> None:
-    if not torch.cuda.is_available():
-        raise RuntimeError("The configured llm environment should provide CUDA")
-
-    device = torch.device("cuda")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Symbol definitions:
     # B = batch size: number of sequences processed together
@@ -45,7 +42,6 @@ def main() -> None:
         dtype=torch.float32,
         device=device,
     ).reshape(batch_size, sequence_length, hidden_size)
-
     print("=== 1. Original tensor: [B, S, H] ===")
     describe("x", x)
     print("x[0, 0] (token index 0) =", x[0, 0].tolist())

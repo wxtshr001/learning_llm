@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0002R：直接索引映射与 Q/K/V Head Layout</title>
+  <style>
+    body{max-width:900px;margin:auto;padding:32px;color:#17232a;background:#fbfaf6;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d7ddd8;padding:.6em;text-align:left}
+  </style>
+</head>
+<body>
+<h1>0002R：从一个元素走到 Q、K、V</h1>
+<p>本补强只处理 0002 答卷暴露的两个关键缺口：把复杂 stride 推导收敛成直接索引映射，以及理解 projection 后的最后一维怎样拆成 Q/K/V heads。已经答对的 B/S/N/D 轴交换不从头重讲。</p>
+
+<section>
+  <h2>1. 进入条件与本节成果</h2>
+  <p>可以直接使用：你已经会计算 <code>D=H/N</code>，知道 reshape 保持元素总数，也知道 <code>transpose(1,2)</code> 把 <code>[B,S,N,D]</code> 变成 <code>[B,N,S,D]</code>。</p>
+  <p>本节结束时，你要能在不展开 storage offset 的情况下完成一个元素的反向映射，并从 projection 输出宽度推出 Q、K、V 的数字 shape。</p>
+</section>
+
+<section>
+  <h2>2. 先追踪一个具体元素</h2>
+  <p>令 <code>B=1</code>（一条序列）、<code>S=2</code>（两个 token）、<code>H=6</code>（每个 token 六个特征）、<code>N=2</code>（两个 head）、<code>D=3</code>（每个 head 三个特征）。</p>
+  <pre>x[0,0] = [0, 1, 2, 3, 4, 5]
+x[0,1] = [6, 7, 8, 9,10,11]
+
+token 下标 1:
+  head 0 = [6,7,8]
+  head 1 = [9,10,11]</pre>
+  <p>现在看 <code>heads[0,1,1,2]</code>：batch 下标 0、head 下标 1、token 下标 1、head 内下标 2。它是上表中的 11，对应 <code>x[0,1,5]</code>。</p>
+  <pre>hidden 下标 = head 下标 * D + head 内下标
+            = 1 * 3 + 2
+            = 5</pre>
+  <div class="card"><code>heads[b,n,s,d] = x[b,s,n*D+d]</code></div>
+  <p>你原答卷中的 stride 展开不是无效工作，但它多绕了一层。这里问的是逻辑元素对应关系：batch 下标不变，token 下标不变，只把 <code>n</code> 和 <code>d</code> 合回 hidden 下标。</p>
+</section>
+
+<section>
+  <h2>3. offset 18 为什么对应数值 18</h2>
+  <p><code>torch.arange(24)</code> 依次生成 0 到 23。连续 tensor 的 storage offset 0 放数值 0，offset 18 放数值 18。因此一旦算出 <code>x[1,1,2]</code> 的 offset 是 18，答案就是 18，不需要再减 1。数组长度 24 的最后一个下标才是 23；“长度减一”不能应用到每个元素的值。</p>
+</section>
+
+<section>
+  <h2>4. projection 到底提供了什么</h2>
+  <p>Projection 是第 0001 课已经通过的 Linear。输入最后一维经过不同的 Linear 后，Q、K、V 可以得到不同宽度的输出。这个输出宽度就是接下来要拆开的 <code>H=N*D</code>；这里的 <code>H</code> 指该 projection 的输出宽度，不要求 Q 与 K/V 使用相同的 head 数。</p>
+  <p>用具体数字：<code>B=1</code>、<code>S=3</code>、Q 有 <code>Nq=2</code> 个 head、K/V 有 <code>Nkv=1</code> 个 head，每个 head 都有 <code>D=4</code> 个特征。</p>
+  <table>
+    <tr><th>张量</th><th>projection 后</th><th>reshape 后</th><th>transpose 后</th></tr>
+    <tr><td>Q</td><td>[1,3,8]，因为 2*4=8</td><td>[1,3,2,4]</td><td>[1,2,3,4]</td></tr>
+    <tr><td>K</td><td>[1,3,4]，因为 1*4=4</td><td>[1,3,1,4]</td><td>[1,1,3,4]</td></tr>
+    <tr><td>V</td><td>[1,3,4]，因为 1*4=4</td><td>[1,3,1,4]</td><td>[1,1,3,4]</td></tr>
+  </table>
+  <div class="card warn">不要从原模型 hidden size 猜最终 head shape。本题已经给出 head 数和每 head 特征数；先算各 projection 的输出宽度 <code>N*D</code>，再执行与 0002 完全相同的 split。</div>
+</section>
+
+<section>
+  <h2>5. 再确认 view 边界</h2>
+  <p><code>transpose</code> 在这里返回共享同一 storage 的 view，通常不搬数据。它改变 shape 与 stride 的对应关系，所以直接 <code>view()</code> 可能无法用目标 shape 解释现有 stride。<code>contiguous()</code> 按当前逻辑次序整理出连续 storage。<code>reshape()</code> 能共享时共享、不能共享时可复制，所以不要依赖它必然采用其中一种方式。</p>
+</section>
+
+<section>
+  <h2>6. 引导练习、独立作业与闭卷复测</h2>
+  <ol>
+    <li>运行 <code>python exercises/0002R_trace_qkv_layout.py</code>，逐行解释两个输出宽度的来源。</li>
+    <li>回到 <code>exercises/0002_head_layout.py</code>，补上 rank 与正数 <code>num_heads</code> 两个输入检查。</li>
+    <li>关闭本页，完成 <code>assessments/0002R-index-and-qkv-layout.md</code>。</li>
+  </ol>
+  <p>指定官方资料：PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.transpose.html">torch.transpose</a> 与 <a href="https://docs.pytorch.org/docs/main/tensor_view.html">Tensor Views</a>。正文已经足够完成复测，链接只用于核实 API 行为。</p>
+</section>
+</body>
+</html>

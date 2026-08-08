@@ -11,13 +11,14 @@
 - 多年 C++、ARM Linux 与嵌入式开发经验。
 - 熟悉连续内存、数组索引、指针、资源管理、并发、性能分析和故障定位。
 - 已通过 Linear shape、逐元素计算、输出索引 `b[j]` 与 bias broadcasting 的复测。
+- 已能计算 `D=H/N`、检查 reshape 元素总数、解释 Sequence/Head 轴交换，并实现 head split/merge 主路径。
 - 对单头 Attention、causal mask、增量解码和 KV Cache 有初步直觉，但尚不能据此跳过 tensor shape 推导。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
-- `[B,S,H]`、`[B,N,S,D]` 等布局中每个字母、每个轴以及每个数字的含义。
-- reshape/transpose 前后的逐元素索引映射，而不只是最终 shape。
+- 从 `[B,N,S,D]` 直接映射回 `[B,S,H]` 的逐元素索引，尤其是 `n*D+d`。
+- Q/K/V projection 输出宽度与各自 head 数、`[B,N,S,D]` layout 的连接。
 - Python/PyTorch API 的语义、报错边界和调试方法。
 - GQA、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
 
@@ -34,7 +35,7 @@
 
 ## 当前最近发展区
 
-当前课程是第 0002 课：从具体 tensor 出发掌握 `reshape`、`transpose`、head layout 以及 `contiguous/view` 边界。未通过本课前，不进入更复杂的 Attention 或 KV Cache 实现。
+当前课程是 0002R：降低抽象层级补强直接元素映射和 Q/K/V layout 迁移，并补代码输入边界。未通过复测前，不进入第 0003 课。
 
 ## 更新规则
 
