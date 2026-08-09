@@ -14,6 +14,10 @@
   用于 `nn.Module`、子模块、参数与 `forward`；只读与最小 decoder 相关部分。
 - [PyTorch Autograd](https://docs.pytorch.org/tutorials/beginner/basics/autogradqs_tutorial.html)
   用于计算图、参数梯度和推理模式；完成一次微型训练后停止深入。
+- [PyTorch Optimizing Model Parameters](https://docs.pytorch.org/tutorials/beginner/basics/optimization_tutorial.html)
+  用于核实 `zero_grad -> forward/loss -> backward -> step` 的训练步骤与梯度累积行为。
+- [PyTorch Autograd Mechanics](https://docs.pytorch.org/docs/stable/notes/autograd.html)
+  用于区分 grad mode、no-grad、inference mode 和 `Module.eval()`；第 0004 课只读局部关闭梯度部分。
 - [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
   Transformer 原始论文。只精读 3.1、3.2、3.4、3.5；训练实验、翻译指标和大部分附录暂时跳过。
 - [GQA: Training Generalized Multi-Query Transformer Models](https://arxiv.org/abs/2305.13245)

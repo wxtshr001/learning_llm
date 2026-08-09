@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0004 速查：PyTorch 训练步骤</title><style>body{max-width:900px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:16px/1.65 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:20px 0}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d7ddd8;padding:.6em;text-align:left}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:16px;overflow:auto;border-radius:8px}.card{border-left:5px solid #176b70;background:#edf7f4;padding:14px}</style></head><body>
+<h1>Module / Autograd / Optimizer 速查</h1>
+<section><h2>对象职责</h2><table><tr><th>对象/调用</th><th>职责</th><th>不负责</th></tr><tr><td><code>nn.Module</code></td><td>组织计算、注册 Parameter/子 Module</td><td>不会自动训练</td></tr><tr><td><code>nn.Parameter</code></td><td>被 Module 注册的可训练 Tensor</td><td>不会自行更新</td></tr><tr><td><code>model(x)</code></td><td>经 Module 调用机制执行 forward</td><td>不修改参数</td></tr><tr><td><code>loss.backward()</code></td><td>计算并累积梯度到 <code>.grad</code></td><td>不修改参数</td></tr><tr><td><code>optimizer.step()</code></td><td>根据现有 grad 修改参数</td><td>不替代 backward</td></tr><tr><td><code>optimizer.zero_grad()</code></td><td>清除上一轮累积梯度</td><td>不清参数值</td></tr></table></section>
+<section><h2>标准单步</h2><pre>optimizer.zero_grad()
+prediction = model(x)
+loss = loss_fn(prediction, target)
+loss.backward()
+optimizer.step()</pre></section>
+<section><h2>SGD</h2><pre>new_parameter = old_parameter - learning_rate * gradient</pre><p>正学习率下，负梯度使参数增大，正梯度使参数减小。</p></section>
+<section><h2>有限差分</h2><pre>gradient ≈ [L(parameter + epsilon) - L(parameter - epsilon)] / (2 * epsilon)</pre><p>扰动时关闭 grad 并恢复参数；它用于验证，不用于正式训练。</p></section>
+<section><h2>推理</h2><pre>model.eval()
+with torch.inference_mode():
+    output = model(x)</pre><div class="card"><code>eval()</code> 改 Module 训练/评估行为；<code>inference_mode()</code> 关闭 autograd 记录。两者不是同一件事。</div></section>
+<p><a href="../lessons/0004-module-autograd-optimizer.html">返回第 0004 课</a></p></body></html>

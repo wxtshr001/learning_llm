@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0004：Module、Parameter、backward 与 optimizer</title>
+  <style>:root{--ink:#17232a;--paper:#fbfaf6;--line:#d7ddd8;--teal:#176b70;--soft:#edf7f4;--orange:#c86d31;--warm:#fff4e9}body{max-width:940px;margin:auto;padding:32px;color:var(--ink);background:var(--paper);font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid var(--line);padding:24px 0}code{background:#eaf2ef;padding:.1em .35em;border-radius:3px}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px;line-height:1.55}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.65em;text-align:left;vertical-align:top}.card{border-left:5px solid var(--teal);background:var(--soft);padding:16px;margin:18px 0}.warn{border-left-color:var(--orange);background:var(--warm)}a{color:var(--teal)}</style>
+</head>
+<body>
+<h1>0004：谁计算，谁求梯度，谁修改参数</h1>
+<p>本课只训练一个标量模型：<code>prediction = scale * x + bias</code>。<code>x</code> 是输入，<code>scale</code> 是缩放参数，<code>bias</code> 是偏置参数，<code>prediction</code> 是预测值。我们用它把 <code>nn.Module</code>、<code>nn.Parameter</code>、<code>forward</code>、<code>backward</code> 和 <code>optimizer</code> 的职责彻底拆开。</p>
+
+<section><h2>1. 进入条件与本节成果</h2><p><strong>可以直接使用：</strong>你会标量乘加、平方、简单导数、Tensor dtype/device 和最大误差。</p><p><strong>必须从零解释：</strong>参数注册、动态计算图、梯度累积、优化器更新和 finite difference（有限差分）验证。</p><p><strong>本节成果：</strong>实现一个有两个可训练参数的 Module，完成一次训练步骤，并证明 autograd 给出的 <code>scale.grad</code> 与有限差分近似一致。</p></section>
+
+<section><h2>2. 先看全部具体数字</h2>
+<table><tr><th>名称</th><th>数值</th><th>含义</th></tr><tr><td><code>x</code></td><td>2</td><td>输入，不是模型参数。</td></tr><tr><td><code>target</code></td><td>10</td><td>目标值，希望 prediction 接近它。</td></tr><tr><td><code>scale</code></td><td>3</td><td>可训练参数。</td></tr><tr><td><code>bias</code></td><td>0</td><td>可训练参数。</td></tr></table>
+<pre>prediction = scale * x + bias
+           = 3 * 2 + 0
+           = 6
+
+loss = (prediction - target)^2
+     = (6 - 10)^2
+     = 16</pre>
+<p><code>loss</code> 是损失，一个衡量预测与目标差距的标量。这里使用 squared error（平方误差）。</p></section>
+
+<section><h2>3. nn.Module：组织计算与注册状态</h2>
+<pre>class ScalarAffine(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.scale = torch.nn.Parameter(torch.tensor(3.0))
+        self.bias = torch.nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, x):
+        return self.scale * x + self.bias</pre>
+<p><code>nn</code> 是 neural network 的缩写。<code>nn.Module</code> 是 PyTorch 模型和层的基础容器；它追踪挂在对象上的子 Module 与 Parameter。<code>forward</code> 描述输入怎样变成输出。</p>
+<p>调用时写 <code>prediction = model(x)</code>，不要直接写 <code>model.forward(x)</code>。<code>model(x)</code> 会经过 Module 的调用机制，再执行 <code>forward</code>。</p>
+<div class="card"><strong>关键边界：</strong><code>forward</code> 使用参数计算输出，但不会因为被调用就自动修改 <code>scale</code> 或 <code>bias</code>。</div></section>
+
+<section><h2>4. nn.Parameter：被 Module 注册的可训练 Tensor</h2><p><code>nn.Parameter</code> 是一种 Tensor。把它赋给 Module 属性后，Module 会把它登记在 <code>named_parameters()</code> 和 <code>parameters()</code> 中；优化器通常从这里取得要更新的对象。</p>
+<pre>for name, parameter in model.named_parameters():
+    print(name, parameter.shape, parameter.requires_grad)
+
+# scale torch.Size([]) True
+# bias  torch.Size([]) True</pre>
+<p><code>torch.Size([])</code> 表示 rank 0 的标量 Tensor。<code>requires_grad=True</code> 表示在默认 grad mode（梯度模式）下，相关运算需要被 autograd 追踪。</p>
+<div class="card warn">普通 Tensor 即使写了 <code>requires_grad=True</code>，如果没有包装成 Parameter 并正确注册，也不会自动出现在 <code>model.parameters()</code> 中。它可以得到梯度，但默认 optimizer 不知道要更新它。</div></section>
+
+<section><h2>5. forward 阶段到底保存什么</h2><p><code>autograd</code> 是 automatic differentiation（自动微分）系统。当至少一个输入需要梯度时，PyTorch 在运行 Tensor 运算的同时记录这些运算之间的关系，形成用于反向计算的图。</p>
+<pre>prediction = model(x)                 # forward
+loss = (prediction - target).pow(2)  # 继续构图</pre>
+<p>图记录的是类似下面的关系：</p>
+<pre>scale --multiply--+
+x -----/          |
+                  +--add bias--> prediction --subtract target--> square--> loss</pre>
+<p>这里的 forward 指从输入到 prediction/loss 的前向计算过程。它产生数值并记录求导所需关系；它不计算最终参数梯度，也不修改参数。</p></section>
+
+<section><h2>6. backward：从 loss 反向得到梯度</h2><p>调用 <code>loss.backward()</code> 后，autograd 使用链式法则计算 loss 对 leaf Parameter（叶子参数，这里可先理解为反向计算最终要写入梯度的已注册参数）的导数，并把结果累积到各 Parameter 的 <code>.grad</code>。</p>
+<p>本例逐步手算：</p>
+<pre>loss = (prediction - target)^2
+
+d(loss)/d(prediction)
+= 2 * (prediction - target)
+= 2 * (6 - 10)
+= -8
+
+d(prediction)/d(scale) = x = 2
+d(prediction)/d(bias)  = 1
+
+d(loss)/d(scale) = -8 * 2 = -16
+d(loss)/d(bias)  = -8 * 1 = -8</pre>
+<p><code>d(loss)/d(scale)</code> 读作“loss 对 scale 的导数”，也就是 scale 的梯度。</p>
+<div class="card"><strong>backward 的职责：</strong>计算并累积梯度。它不会替你重新定义 loss，也不会修改参数值。</div></section>
+
+<section><h2>7. optimizer.step：真正修改参数</h2><p><code>optimizer</code> 是优化器对象，保存要更新的 Parameter 引用和更新规则。本例使用 SGD（stochastic gradient descent，随机梯度下降），学习率 <code>lr=0.1</code>；<code>lr</code> 是 learning rate，控制单步更新幅度。</p>
+<pre>optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+new_parameter = old_parameter - lr * gradient
+
+new_scale = 3 - 0.1 * (-16) = 4.6
+new_bias  = 0 - 0.1 * (-8)  = 0.8</pre>
+<p>梯度为负时，普通正学习率 SGD 会减去负数，所以参数增大。更新后：</p>
+<pre>new_prediction = 4.6 * 2 + 0.8 = 10
+new_loss = (10 - 10)^2 = 0</pre>
+<div class="card warn"><code>optimizer.step()</code> 使用已经存在于 <code>.grad</code> 的梯度更新参数。若还没 backward，或者 grad 是旧值，它不会自动替你补算正确梯度。</div></section>
+
+<section><h2>8. zero_grad：为什么每轮要清梯度</h2><p>PyTorch 默认把新梯度加到已有 <code>.grad</code>，而不是覆盖。这样做支持多个 loss 或多个 micro-batch（微批次）的梯度累积，但普通单步训练需要先清零：</p>
+<pre>optimizer.zero_grad()
+prediction = model(x)
+loss = (prediction - target).pow(2)
+loss.backward()
+optimizer.step()</pre>
+<p>若第一次 backward 得到 <code>scale.grad=-16</code>，不清零又对同一参数关系做一次等价 backward，grad 会累积为 <code>-32</code>。</p></section>
+
+<section><h2>9. finite difference：不用 autograd 检查梯度</h2><p>finite difference（有限差分）通过轻微扰动参数，观察 loss 的变化来近似导数。令 <code>epsilon</code>（记作 ε）为很小的正数：</p>
+<pre>d(loss)/d(scale) ≈ [L(scale + ε) - L(scale - ε)] / (2 * ε)</pre>
+<p><code>L(...)</code> 表示把指定 scale 代入后重新 forward 得到的 loss。使用 <code>ε=0.001</code>：</p>
+<pre>L(3.001) = (3.001*2 - 10)^2 = 15.984004
+L(2.999) = (2.999*2 - 10)^2 = 16.016004
+
+(15.984004 - 16.016004) / 0.002 ≈ -16</pre>
+<p>它与 autograd 的 <code>scale.grad=-16</code> 对齐。有限差分不是训练方法，而是验证梯度实现是否可信的测试工具。扰动参数时使用 <code>torch.no_grad()</code>，并在结束后恢复原值。</p></section>
+
+<section><h2>10. 推理时关闭什么</h2>
+<pre>model.eval()
+with torch.inference_mode():
+    prediction = model(x)</pre>
+<p><code>model.eval()</code> 把 Module 切换到 evaluation mode（评估模式），会影响 Dropout（训练时随机屏蔽部分激活）和 BatchNorm（使用批次统计量做归一化）等有训练/评估差异的层；它本身不关闭梯度记录。<code>torch.inference_mode()</code> 才会关闭反向图记录并减少相关开销。本课的小模型没有 Dropout/BatchNorm，但要先建立这两个动作职责不同的认识。</p></section>
+
+<section><h2>11. 完成顺序</h2><ol><li>运行 <code>python exercises/0004_explore_training_step.py</code>。</li><li>逐行对应 Parameter 注册、forward、backward、finite difference、step 和 inference 输出。</li><li>完成 <code>exercises/0004_module_autograd_optimizer.py</code> 中的 TODO，运行全部测试。</li><li>查看 <a href="../reference/0004-training-step-cheatsheet.html">训练步骤速查表</a>，然后关闭资料。</li><li>闭卷完成 <a href="../assessments/0004-module-autograd-optimizer.md">0004 过关测试</a>。</li></ol><p>不清楚任何符号或步骤时先问我，不需要靠猜完成。</p></section>
+
+<section><h2>12. 官方核实资料</h2><ul><li><a href="https://docs.pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html">Build the Neural Network</a>：Module、forward 和参数注册。</li><li><a href="https://docs.pytorch.org/tutorials/beginner/basics/autogradqs_tutorial.html">Automatic Differentiation</a>：计算图与 backward。</li><li><a href="https://docs.pytorch.org/tutorials/beginner/basics/optimization_tutorial.html">Optimizing Model Parameters</a>：zero_grad、backward、step 顺序。</li><li><a href="https://docs.pytorch.org/docs/stable/notes/autograd.html">Autograd Mechanics</a>：grad mode、no-grad、inference mode 与 eval 的边界。</li></ul><p>正文已经足够完成作业，官方资料只用于核实。预计用时 90～120 分钟。</p></section>
+
+<nav><a href="0003-tensor-dtype-device.html">← 上一课 0003</a></nav>
+</body></html>

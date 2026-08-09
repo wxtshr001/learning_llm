@@ -4,9 +4,9 @@
 
 ## 当前门禁
 
-**第 0003 课首次提交 75/100；正在进行 0003R 局部补强。**
+**第 0003 课最终裁决 92/100，通过；第 0004 课进行中。**
 
-独立作业已在 `cuda:0` 复跑并全部通过。关键题 3 的书面执行路径不完整：只迁移 X，没有迁移 W、b 和 dtype；candidate 也没有明确统一为 CPU/float32。另有一次 0.0010/0.0001 小数位错误。进入 20～30 分钟 0003R，不重做代码主作业。
+学习者反对初次 75 分裁决后，复核确认题中 W、b 已在 CUDA，且未规定 dtype；只迁移 X 的答案正确。单次小数位笔误没有破坏最大误差与门限结论，不构成概念缺口。0003R 已撤销。当前进入最小 Module、Parameter、autograd 和 optimizer。
 
 ## 已完成
 
@@ -17,31 +17,31 @@
 - 0002 已证明部分：能计算 `D=H/N`、保持 reshape 元素总数、解释 Sequence/Head 轴交换，并实现 split/merge 主路径。
 - 0002R 书面题 95/100：直接索引、具体数值、Q/K/V projection 输出宽度与 head layout 三个关键题全部通过。
 - 第 0002 课与 0002R 门禁正式完成。
-- 0003 已证明部分：dtype 转换、字节计算、三输入迁移、CUDA Linear 和最大绝对误差的代码实现均通过。
+- 第 0003 课最终 92/100：dtype 转换、字节计算、三输入迁移、CUDA Linear、最大绝对误差和容差判断均通过。
 
 ## 非阻塞工程提醒
 
 - `split_heads()` 当前先解包 shape 再检查 rank；以后修改生产代码时应先验证再解包，但不将此记录为知识概念缺口。
+- 0003 有一次 0.0010/0.0001 算术笔误，但最大误差与门限结论正确，不作为 dtype/device 概念缺口。
 
 ## 学习者下一步
 
-1. 学习 `lessons/0003R-device-path-and-error.html`。
-2. 运行 `exercises/0003R_trace_device_path.py`。
-3. 闭卷完成 `assessments/0003R-device-path-and-error.md`。
-4. 将输出和答案写入 `submissions/0003R.md` 或直接提交给当前 Agent。
+1. 学习 `lessons/0004-module-autograd-optimizer.html`。
+2. 运行 `exercises/0004_explore_training_step.py`。
+3. 完成 `exercises/0004_module_autograd_optimizer.py` 中的 TODO 并运行测试。
+4. 闭卷完成 `assessments/0004-module-autograd-optimizer.md`。
+5. 将输出和答案写入 `submissions/0004.md` 或直接提交给当前 Agent。
 
 ## Agent 下一步
 
-- 收到 0003R 答卷前不生成第 0004 课。
-- 复测只检查完整 device/dtype 路径、误差小数位和 token id 索引语义。
-- 0003R 关键题 1、2 均通过且总分至少 80，才将第 0003 课记为正式通过。
+- 收到 0004 答卷前不生成第 0005 课。
+- 评分不得增加题面未声明条件；单次算术笔误须结合完整证据判断。
+- 0004 代码与关键题 2、3 均通过且总分至少 80，才进入第 0005 课。
 
 ## 最近证据
 
-- `submissions/0002R-feedback.md`
-- `learning-records/0005-head-index-and-qkv-layout-proven.md`
-- `lessons/0003-tensor-dtype-device.html`
 - `submissions/0003-feedback.md`
-- `learning-records/0006-dtype-device-partial-remediation-required.md`
+- `learning-records/0006-tensor-dtype-device-proven.md`
+- `lessons/0004-module-autograd-optimizer.html`
 
 环境配置见 `ENVIRONMENT.md`。硬件信息只代表记录时主机，另一平台必须运行 `exercises/0000_verify_pytorch.py` 自行验证。

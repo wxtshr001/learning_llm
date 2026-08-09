@@ -15,13 +15,14 @@
 - 已通过 0002R 三个关键概念题：直接使用 `n*D+d` 映射 hidden 索引、追踪 transpose 后具体数值，并从 Q/K/V projection 宽度推出不同 head layout。
 - 第 0002 课已正式通过；一次 rank 检查顺序问题由学习者明确归类为未留意代码逻辑，不作为概念能力缺口。
 - 第 0003 课代码已证明会计算 dtype 字节数、迁移 X/W/b 到统一 device/dtype，并在 CUDA 上比较最大绝对误差。
+- 第 0003 课最终 92/100 通过；能解释 dtype 精度损失、显式 device 迁移、内存成本与容差门限。
 - 对单头 Attention、causal mask、增量解码和 KV Cache 有初步直觉，但尚不能据此跳过 tensor shape 推导。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
 - Python/PyTorch API 的语义、报错边界和调试方法。
-- 书面构造完整 device/dtype 执行路径、误差小数位和 token id 的精确整数索引语义正在 0003R 补强。
+- `nn.Module`/`nn.Parameter` 注册、autograd 梯度累积、optimizer 更新和 finite difference 验证。
 - GQA、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
 
 ## 强制教学适配
@@ -37,7 +38,7 @@
 
 ## 当前最近发展区
 
-当前进行 0003R：只补完整 device/dtype 执行路径、误差小数位和 token id 索引语义。第 0003 课代码无需重做；0003R 通过后才进入 Module/autograd。
+当前进行第 0004 课：用一个标量 affine Module 建立 Parameter 注册、forward、backward、optimizer 和 finite difference 的完整职责边界。可以复用标量导数直觉，但 PyTorch 生命周期必须从具体代码讲起。
 
 ## 更新规则
 

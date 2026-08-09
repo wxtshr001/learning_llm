@@ -1,23 +1,25 @@
 # 从这里开始
 
-当前课程状态：**第 0001、0002 课已通过；第 0003 课首次提交 75/100，正在进行 0003R 局部补强。**
+当前课程状态：**第 0001、0002、0003 课已通过；正在进行第 0004 课。**
 
-请完成 [第 0003R 课：完整 device 路径与误差](./lessons/0003R-device-path-and-error.html)。
+请完成 [第 0004 课：Module、Parameter、Autograd 与 Optimizer](./lessons/0004-module-autograd-optimizer.html)。
 
 ## 今天要做的事
 
-1. 阅读 0003R，只看完整三输入迁移、比较格式和误差小数位。
-2. 运行 [0003R 引导脚本](./exercises/0003R_trace_device_path.py)。
-3. 关闭资料，完成 [0003R 闭卷复测](./assessments/0003R-device-path-and-error.md)。
-4. 把答案直接发给 Codex，或者填写 [0003R 提交模板](./submissions/0003R.md) 后告诉 Codex 检查。
+1. 阅读第 0004 课，用具体数字区分 forward、backward 和 optimizer。
+2. 运行 [0004 探索脚本](./exercises/0004_explore_training_step.py)。
+3. 完成 [0004 独立作业](./exercises/0004_module_autograd_optimizer.py) 中的 TODO。
+4. 查看 [训练步骤速查表](./reference/0004-training-step-cheatsheet.html)，然后关闭资料。
+5. 闭卷完成 [0004 过关测试](./assessments/0004-module-autograd-optimizer.md)。
+6. 把答案直接发给 Codex，或者填写 [0004 提交模板](./submissions/0004.md) 后告诉 Codex 检查。
 
 ## 我会如何判定
 
-- **通过**：0003R 关键题 1、2 正确且总分至少 80，第 0003 课正式完成。
-- **继续局部补测**：仍只有一个小项错误，只补该项。
-- **不重做代码**：0003 主作业已经在 CUDA 上全部通过。
+- **通过**：代码与关键题 2、3 正确且总分至少 80，进入第 0005 课。
+- **针对性补强**：只补 Parameter 注册、梯度手算或步骤职责中的实际缺口。
+- **评分约束**：不增加题面未声明条件，单次算术笔误结合完整证据判断。
 
-0003R 预计 20～30 分钟，目标是能完整写出 X/W/b/Y/candidate 的 device/dtype 路径，并稳定计算小数误差。
+第 0004 课预计 90～120 分钟，目标是实现一次可解释、可用 finite difference 验证的最小训练步骤。
 
 ## 其他文件是什么
 
@@ -30,9 +32,7 @@
 
 ## 环境说明
 
-已建立独立 Conda 环境 `llm`：Python 3.11.15、PyTorch 2.12.1、CUDA 12.6 和 NumPy 2.4.6。第 1 课仍从纯 Python 实现开始，后续课程再使用 PyTorch 对齐。
-
-验证环境：
+已建立独立 Conda 环境 `llm`：Python 3.11.15、PyTorch 2.12.1、CUDA 12.6 和 NumPy 2.4.6。
 
 ```powershell
 conda activate llm

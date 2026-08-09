@@ -4,27 +4,29 @@
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0003R",
-    "title": "complete device/dtype execution path and decimal error",
+    "lesson_id": "0004",
+    "title": "Module, Parameter, autograd, optimizer, and finite-difference parity",
     "status": "in_progress",
-    "lesson": "lessons/0003R-device-path-and-error.html",
-    "guided_exercise": "exercises/0003R_trace_device_path.py",
-    "assessment": "assessments/0003R-device-path-and-error.md",
-    "submission": "submissions/0003R.md"
+    "lesson": "lessons/0004-module-autograd-optimizer.html",
+    "guided_exercise": "exercises/0004_explore_training_step.py",
+    "exercise": "exercises/0004_module_autograd_optimizer.py",
+    "assessment": "assessments/0004-module-autograd-optimizer.md",
+    "submission": "submissions/0004.md",
+    "reference": "reference/0004-training-step-cheatsheet.html"
   },
-  "completed_lessons": ["0001", "0002"],
+  "completed_lessons": ["0001", "0002", "0003"],
   "completed_remediation": ["0001R", "0001R2", "0002R"],
-  "next_normal_lesson": "0004",
+  "next_normal_lesson": "0005",
   "next_course_generated": false,
   "gate": {
     "minimum_score": 80,
-    "score": 75,
-    "result": "targeted_remediation",
-    "critical_items": ["question_1", "question_2"]
+    "score": null,
+    "result": "awaiting_submission",
+    "critical_items": ["code", "question_2", "question_3"],
+    "previous_adjudication": "lesson 0003 passed at 92 after removing unstated dtype criteria"
   },
   "last_verified_evidence": [
-    "submissions/0002R-feedback.md",
-    "learning-records/0006-dtype-device-partial-remediation-required.md",
-    "submissions/0003-feedback.md"
+    "submissions/0003-feedback.md",
+    "learning-records/0006-tensor-dtype-device-proven.md"
   ]
 }
