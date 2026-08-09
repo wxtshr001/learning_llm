@@ -61,7 +61,7 @@ token 1 mean_square = (0.25 + 0.25 + 2.25 + 2.25) / 4 = 1.25</pre>
   <div class="node down">down projection<small>I → H</small></div><div class="arrow">→</div>
   <div class="node">输出 y<small>[B,S,H]</small></div>
 </div>
-<p class="legend">图 1：普通 FFN 的结构图。<code>I</code> 是 intermediate size（中间特征数），通常比 <code>H</code> 大；它像在 C++ 中申请一块更宽的临时 feature buffer。类比只帮助理解 shape：实际 Linear 是矩阵运算，不是手工搬运数组。</p>
+<p class="legend">普通 FFN 结构图：<code>I</code> 是 intermediate size（中间特征数），通常比 <code>H</code> 大；它像在 C++ 中申请一块更宽的临时 feature buffer。类比只帮助理解 shape：实际 Linear 是矩阵运算，不是手工搬运数组。</p>
 <div class="formula">ordinary_ffn(x) = down_proj( activation(up_proj(x)) )</div>
 <table><tr><th>步骤</th><th>输入 → 输出</th><th>做什么</th><th>为什么需要</th></tr>
 <tr><td><code>up_proj</code></td><td><code>[B,S,H] → [B,S,I]</code></td><td>把每个 token 从 H 个特征映射到 I 个中间特征。</td><td>提供更宽的特征组合空间。</td></tr>
@@ -90,7 +90,7 @@ token 1 mean_square = (0.25 + 0.25 + 2.25 + 2.25) / 4 = 1.25</pre>
   <div class="node down">down_proj<small>I → H</small></div><div class="arrow">→</div>
   <div class="node">output<small>[B,S,H]</small></div>
 </div>
-<p class="legend">图 2：Gated FFN 数据流。两条分支读取同一个 token 的 x，在相同的 I 轴上逐元素汇合；它们不会混合不同 token。</p>
+<p class="legend">Gated FFN 数据流：两条分支读取同一个 token 的 x，在相同的 I 轴上逐元素汇合；它们不会混合不同 token。</p>
 
 <h3>4.4 第一步：gate_proj 产生 gate_raw</h3>
 <pre>gate_raw = gate_proj(x)     # [B,S,H] -> [B,S,I]</pre>
@@ -171,16 +171,57 @@ gate_raw = [4,10,17]                   # [I=3]</pre>
 <div class="fork" role="img" aria-label="Gated FFN backward 梯度路径图"><div class="node">loss</div><div class="arrow">←</div><div class="node down">down_proj</div><div class="arrow">←</div><div class="node multiply">gate * up</div><div class="arrow">↖<br>↙</div><div class="branches"><div class="branch"><div class="node">SiLU</div><div class="arrow">←</div><div class="node">gate_proj</div></div><div class="branch"><div class="node">up_proj</div></div></div></div>
 <p>backward 从 loss 反向经过 down_proj 和逐元素乘法后分叉：一条到 up_proj，另一条经过 SiLU 到 gate_proj。因此只要 loss 依赖 output，三组 weight 都应得到 grad。梯度具体数值可能为 0，但 <code>grad is None</code> 表示根本没有建立到该参数的梯度路径。</p></section>
 
-<section><h2>7. 为什么 RMSNorm 和 FFN 不混合 token</h2><p>“不混合 token”不是指整个 tensor 只含一个 token，而是指固定输出位置 <code>[b,s,:]</code> 后，它只读取同一个输入位置 <code>x[b,s,:]</code>。</p>
-<table><tr><th>组件</th><th>读取范围</th><th>是否读取另一个 s</th></tr><tr><td>RMSNorm</td><td>固定 b、s，沿 H 轴读取 <code>x[b,s,0:H]</code></td><td>否</td></tr><tr><td>gate/up/down Linear</td><td>固定 b、s，矩阵只作用于最后特征轴</td><td>否</td></tr><tr><td>Attention</td><td>一个 token 可根据规则读取其他 token 的信息</td><td>是，这才承担 token mixing</td></tr></table>
-<p>用两个 token 做思想实验：</p><pre>x[0,0,:] = [1,2,3,4]
-x[0,1,:] = [5,6,7,8]
+<section><h2>7. RMSNorm 和 FFN 在 decoder block 里是什么关系</h2>
+<p>前面把 RMSNorm 和 FFN 分开讲，是为了先看清各自公式；但真实网络会把它们串起来使用。Qwen3 的一个 decoder layer（解码器层）包含两段主要计算：</p>
+<ol><li>RMSNorm → Self-Attention → residual add；</li><li>RMSNorm → Gated FFN/MLP → residual add。</li></ol>
+<p><code>residual</code> 是残差旁路：先保存子层输入，子层算出一个改变量后，再把原输入加回来。</p>
+<div class="flow" role="img" aria-label="Qwen decoder layer 完整数据流图"><div class="node">hidden_states<small>[B,S,H]</small></div><div class="arrow">→</div><div class="node">input RMSNorm</div><div class="arrow">→</div><div class="node multiply">Self-Attention<small>这里混合 token</small></div><div class="arrow">→</div><div class="node">+ residual</div><div class="arrow">→</div><div class="node">post-attention<br>RMSNorm</div><div class="arrow">→</div><div class="node down">Gated FFN / MLP<small>逐 token 变换</small></div><div class="arrow">→</div><div class="node">+ residual</div></div>
+<p class="legend">Qwen decoder layer 主数据流：两个 RMSNorm 分别为 Attention 和 FFN 准备输入；Attention 负责 token 之间的信息交换，FFN 负责每个 token 内部的特征变换。</p>
 
-只把第二个 token 改成 [-5,-6,-7,-8]：
-- RMSNorm/FFN 的 output[0,0,:] 应保持不变
-- output[0,1,:] 会改变</pre>
-<p>索引层面的原因是公式始终保留相同的 b、s：</p><div class="formula">ffn_output[b,s,h_out] = Σ<sub>i</sub> mixed[b,s,i] × down_weight[h_out,i]</div>
-<p>求和发生在 I 轴，不发生在 S 轴。以后看到一个新算子时，可用同样方法检查：公式是否对 token 下标 s 求和，或读取了其他 s。</p></section>
+<h3>7.1 RMSNorm 怎样把结果交给 FFN</h3>
+<p>只看第二段，也就是本课真正实现的关系：</p>
+<pre>residual = hidden_states
+normed   = post_attention_layernorm(hidden_states)
+delta    = mlp(normed)                   # mlp 就是 gated FFN
+output   = residual + delta</pre>
+<table><tr><th>变量</th><th>shape</th><th>作用</th></tr><tr><td><code>hidden_states</code></td><td><code>[B,S,H]</code></td><td>Attention 残差相加后的当前 token 表示。</td></tr><tr><td><code>normed</code></td><td><code>[B,S,H]</code></td><td>RMSNorm 调整每个 token 向量的尺度，为 FFN 提供数值更稳定的输入。</td></tr><tr><td><code>delta</code></td><td><code>[B,S,H]</code></td><td>FFN 根据 normed 计算出的特征改变量。</td></tr><tr><td><code>output</code></td><td><code>[B,S,H]</code></td><td>保留原 hidden_states，再叠加 FFN 学到的改变量。</td></tr></table>
+<div class="card"><strong>二者的关系是顺序关系，不是同一个公式：</strong>RMSNorm 先整理 FFN 的输入尺度；FFN 再变换特征；residual add 把 FFN 的结果加回原输入。RMSNorm 没有调用 FFN，FFN 内部也没有自动包含 RMSNorm，它们由 decoder layer 的 forward 串起来。</div>
+<p><code>post_attention_layernorm</code> 这个名字容易误解。它表示“位于 Attention 之后的那个 RMSNorm”，但在 FFN 这条子路径上，它实际上位于 FFN 之前，所以这种结构也叫 <strong>pre-norm</strong>：每个主要子层在进入 Attention/FFN 前先归一化。</p>
+
+<h3>7.2 用两个 token 看完整的 RMSNorm → FFN → residual</h3>
+<p>为了只观察连接关系，暂时把实际 gated FFN 记作同一个函数 <code>F</code>。输入有两个 token：</p>
+<pre>hidden_states[0,0,:] = [3,4]    # token 0
+hidden_states[0,1,:] = [0,5]    # token 1</pre>
+<p>RMSNorm 固定 b、s，分别沿 H 轴计算：</p>
+<pre>token 0: [3,4] / sqrt((9+16)/2) ≈ [0.8485, 1.1314]
+token 1: [0,5] / sqrt((0+25)/2) ≈ [0.0000, 1.4142]</pre>
+<p>然后同一套 FFN 参数分别处理两个向量：</p>
+<pre>delta[0,0,:] = F([0.8485, 1.1314])
+delta[0,1,:] = F([0.0000, 1.4142])
+
+output[0,0,:] = [3,4] + delta[0,0,:]
+output[0,1,:] = [0,5] + delta[0,1,:]</pre>
+<p>注意：FFN 的 weight 在所有 token 之间共享，但每次计算仍只读取当前 token 的 H 个特征。共享同一个函数不等于把两个输入混在一起；类似 C++ 循环对数组中每个 record 调用同一个函数：</p>
+<pre>for (int s = 0; s &lt; S; ++s) {
+    normed[s] = rms_norm(hidden_states[s]);
+    delta[s]  = gated_ffn(normed[s]);
+    output[s] = hidden_states[s] + delta[s];
+}</pre>
+
+<h3>7.3 “不混合 token”到底是什么意思</h3>
+<p>固定输出位置 <code>[b,s,:]</code> 后，RMSNorm 和 FFN 只读取同一个输入位置 <code>x[b,s,:]</code>：</p>
+<table><tr><th>组件</th><th>读取范围</th><th>是否主动读取另一个 s</th></tr><tr><td>RMSNorm</td><td>固定 b、s，沿 H 轴读取 <code>x[b,s,0:H]</code></td><td>否</td></tr><tr><td>gate/up/down Linear</td><td>固定 b、s，矩阵只作用于最后特征轴</td><td>否</td></tr><tr><td>Self-Attention</td><td>一个 token 按 causal mask 读取允许关注的其他 token</td><td>是</td></tr></table>
+<p>索引层面的证据是 FFN 只对 I 轴求和：</p><div class="formula">ffn_output[b,s,h_out] = Σ<sub>i</sub> mixed[b,s,i] × down_weight[h_out,i]</div>
+<p>公式没有对 token 下标 s 求和，也没有出现另一个 <code>s2</code>。只修改 token 1 的输入时，单独运行 RMSNorm→FFN，token 0 的输出应保持不变。</p>
+
+<h3>7.4 一个容易忽略但非常重要的边界</h3>
+<div class="card warn"><strong>FFN 不主动混合 token，不代表它完全不知道其他 token。</strong>FFN 的输入通常已经经过 Self-Attention；Attention 可能已把前文 token 的信息写进当前 token 的 hidden vector。FFN 随后只在当前 token 内部加工这些已经汇集的信息。</div>
+<p>可以把 Attention 类比成各 token 之间的通信阶段，把 RMSNorm→FFN 类比成每个 token 收到信息后的本地计算阶段：</p>
+<pre>Attention:      token 之间交换/汇集信息
+RMSNorm:       调整每个 token 当前向量的尺度
+Gated FFN:     在每个 token 内部重新组合和筛选特征
+Residual add:  保留原表示，再叠加本次子层改变量</pre>
+<p>这正是 <a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3DecoderLayer 官方实现</a>中的调用顺序。</p></section>
 
 <section><h2>8. parity：怎样证明“实现正确”，而不只是“能运行”</h2><p><code>parity</code> 在这里表示 candidate（待测实现）与 reference（可信参考实现）在相同条件下数值对齐。脚本没有报异常，只能说明语法和某条执行路径可运行，不能证明公式写对。</p>
 <div class="flow" role="img" aria-label="Reference parity 验证流程图"><div class="node">同一输入</div><div class="arrow">↗<br>↘</div><div class="node">candidate<br>reference</div><div class="arrow">→</div><div class="node">比较 shape</div><div class="arrow">→</div><div class="node">逐元素误差</div><div class="arrow">→</div><div class="node">容差判定</div></div>

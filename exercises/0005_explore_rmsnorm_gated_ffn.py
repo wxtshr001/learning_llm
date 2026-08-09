@@ -110,7 +110,23 @@ def main() -> None:
     print("Gated FFN max absolute error:", ffn_error)
     torch.testing.assert_close(module_output, output, rtol=1e-6, atol=1e-7)
 
-    print("\n=== 3. Backward evidence ===")
+    print("\n=== 3. RMSNorm -> FFN -> residual block ===")
+    block_output = x + module_output
+    explicit_block_output = x + ffn(custom_norm(x))
+    torch.testing.assert_close(block_output, explicit_block_output)
+    changed_x = x.clone()
+    changed_x[:, 1, :] = torch.tensor([-9.0, 8.0, -7.0, 6.0], device=device)
+    changed_block_output = changed_x + ffn(custom_norm(changed_x))
+    first_token_change = (block_output[:, 0, :] - changed_block_output[:, 0, :]).abs().max().item()
+    second_token_change = (block_output[:, 1, :] - changed_block_output[:, 1, :]).abs().max().item()
+    print("block formula: output = x + ffn(rmsnorm(x))")
+    print("block input/output shape:", tuple(x.shape), tuple(block_output.shape))
+    print("change token 1 -> token 0 max change:", first_token_change)
+    print("change token 1 -> token 1 max change:", second_token_change)
+    assert first_token_change == 0.0
+    assert second_token_change > 0.0
+
+    print("\n=== 4. Backward evidence ===")
     loss = module_output.square().mean()
     loss.backward()
     for name, parameter in ffn.named_parameters():

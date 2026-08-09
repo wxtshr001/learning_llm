@@ -82,6 +82,13 @@ def run_tests() -> None:
     assert module_output.shape == (b, s, h)
     torch.testing.assert_close(module_output, explicit_output, rtol=1e-6, atol=1e-7)
 
+    block_output = x + module_output
+    changed_x = x.clone()
+    changed_x[:, 2, :] = torch.tensor([9.0, -8.0, 7.0, -6.0], device=device)
+    changed_output = changed_x + ffn(custom_norm(changed_x))
+    torch.testing.assert_close(block_output[:, :2, :], changed_output[:, :2, :])
+    assert not torch.equal(block_output[:, 2, :], changed_output[:, 2, :])
+
     loss = module_output.square().mean()
     loss.backward()
     for parameter in ffn.parameters():
@@ -96,6 +103,8 @@ def run_tests() -> None:
         print("RMSNorm float16 output dtype preserved:", half_candidate.dtype)
     print("gate/up shape [B,S,I]:", tuple(gate.shape), tuple(up.shape))
     print("Gated FFN output shape:", tuple(module_output.shape))
+    print("RMSNorm -> FFN -> residual shape:", tuple(block_output.shape))
+    print("changing one token leaves other token outputs unchanged: True")
     print("Gated FFN max absolute error:", (module_output - explicit_output).abs().max().item())
     print("all FFN parameter gradients finite: True")
 

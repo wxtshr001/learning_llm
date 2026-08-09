@@ -10,6 +10,8 @@
 
 0005 初版不只 gated FFN 章节过于简略，其他章节也存在“结论先行”。现已完成全课审查与重写：补充进入条件、rank/axis、RMSNorm 动机与完整数据流、广播索引、dtype 边界、Linear 逐元素映射、Module/梯度路径、token 独立性、parity 流程、Qwen 映射、练习证据和指定阅读范围。
 
+学习者仍无法从“RMSNorm/FFN 不混合 token”理解二者关系，说明第 7 章缺少 decoder block 上下文。现已按 Qwen3DecoderLayer 的真实顺序补充两段 pre-norm 子层、residual connection、RMSNorm→FFN 数据流、双 token 数值流，以及“FFN 不主动混合但可加工 Attention 已汇集信息”的关键边界。
+
 ## 已完成
 
 - 初始能力诊断。

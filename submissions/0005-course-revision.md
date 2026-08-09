@@ -32,3 +32,17 @@
 - 第 9 章增加最小实现与 Qwen3 源码对象的逐项映射；
 - 第 10、11 章增加分阶段完成证据和指定资料的精确阅读范围；
 - 探索脚本现在输出 RMSNorm 与 gated FFN 的关键中间值；独立作业新增 float16 输出 dtype 验证。
+
+## 第三轮：补齐 decoder block 上下文
+
+学习者无法从“RMSNorm 和 FFN 不混合 token”理解二者在网络中的关系。复核后确认，原第 7 章只证明局部索引性质，没有先展示组件在真实网络中的连接位置。
+
+本轮修订：
+
+- 按 Qwen3DecoderLayer 官方实现补充 `RMSNorm -> Attention -> residual` 与 `RMSNorm -> MLP/FFN -> residual` 两段数据流；
+- 解释 `post_attention_layernorm` 位于 Attention 之后、FFN 之前，是 FFN 的 pre-norm；
+- 明确 RMSNorm 负责整理 FFN 输入尺度，FFN 产生 delta，residual 保存并加回原 hidden states；
+- 用两个 token 展示 RMSNorm→FFN→residual 的逐位置计算；
+- 区分“FFN 不主动读取其他 token”与“FFN 输入已包含 Attention 汇集的上下文”；
+- 探索脚本和独立作业增加修改单个 token、验证其他位置输出不变的测试；
+- 同步更新速查表与 decoder 迁移题。

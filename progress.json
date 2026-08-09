@@ -14,7 +14,7 @@
     "submission": "submissions/0005.md",
     "reference": "reference/0005-rmsnorm-gated-ffn-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-09: full-lesson rewrite covering prerequisites, axes, RMSNorm motivation/data flow, broadcasting, dtype, Linear indexing, Module gradients, token independence, parity, Qwen mapping, and gated FFN tradeoffs",
+  "current_lesson_revision": "2026-08-09: added verified Qwen decoder-block context, two pre-norm residual sublayers, RMSNorm-to-FFN sequencing, token-local numeric flow, and attention-context boundary",
   "completed_lessons": ["0001", "0002", "0003", "0004"],
   "completed_remediation": ["0001R", "0001R2", "0002R"],
   "next_normal_lesson": "0006",
