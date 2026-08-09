@@ -5,10 +5,13 @@
 <section><h2>RMSNorm</h2><pre>variance = x.float().pow(2).mean(-1, keepdim=True)  # [B,S,1]
 y = x * rsqrt(variance + eps)                       # [B,S,H]
 out = y * weight                                    # weight [H]</pre><p>沿最后 H 轴；不减均值；shape 不变。</p></section>
-<section><h2>Gated FFN</h2><pre>gate = silu(gate_proj(x))  # [B,S,I]
+<section><h2>普通 FFN → Gated FFN</h2><pre>ordinary = down_proj(activation(up_proj(x)))
+
+gate = silu(gate_proj(x))  # [B,S,I]
 up = up_proj(x)            # [B,S,I]
 mixed = gate * up          # [B,S,I]
 out = down_proj(mixed)     # [B,S,H]</pre><table><tr><th>weight</th><th>shape</th></tr><tr><td>gate_proj.weight</td><td>[I,H]</td></tr><tr><td>up_proj.weight</td><td>[I,H]</td></tr><tr><td>down_proj.weight</td><td>[H,I]</td></tr></table></section>
+<section><h2>每一步的职责</h2><table><tr><th>步骤</th><th>职责</th></tr><tr><td>gate_proj</td><td>生成 I 个门控原始值</td></tr><tr><td>SiLU</td><td>逐元素得到连续调节系数</td></tr><tr><td>up_proj</td><td>生成 I 个候选内容特征</td></tr><tr><td>gate * up</td><td>第 i 个 gate 调节第 i 个内容特征</td></tr><tr><td>down_proj</td><td>把 I 个中间特征组合回 H</td></tr></table><p>相同 I、忽略 bias：普通 FFN 为 2HI 个 Linear 参数；gated FFN 为 3HI。</p></section>
 <section><h2>Parity</h2><pre>assert candidate.shape == reference.shape
 torch.testing.assert_close(reference, candidate, rtol=1e-5, atol=1e-6)
 assert all(p.grad is not None and torch.isfinite(p.grad).all()

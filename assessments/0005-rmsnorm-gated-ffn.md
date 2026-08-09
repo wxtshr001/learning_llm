@@ -79,6 +79,7 @@ up             = [2.0, -3.0, 4.0]
 1. RMSNorm 和 gated FFN 是否混合不同 token？为什么？
 2. 它们分别操作哪个轴？
 3. 为什么 gated FFN 最后要从 I 投影回 H？
+4. 相比普通 `down(activation(up(x)))` FFN，gated FFN 多了哪条路径和哪一步运算？它带来什么能力，又增加什么成本？
 
 ## 通过标准
 

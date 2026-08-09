@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0005：RMSNorm 与 Gated FFN</title><style>:root{--ink:#17232a;--paper:#fbfaf6;--line:#d7ddd8;--teal:#176b70;--soft:#edf7f4;--orange:#c86d31;--warm:#fff4e9}body{max-width:950px;margin:auto;padding:32px;color:var(--ink);background:var(--paper);font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid var(--line);padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.65em;text-align:left;vertical-align:top}.card{border-left:5px solid var(--teal);background:var(--soft);padding:16px;margin:18px 0}.warn{border-left-color:var(--orange);background:var(--warm)}a{color:var(--teal)}</style></head><body>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0005：RMSNorm 与 Gated FFN</title><style>:root{--ink:#17232a;--paper:#fbfaf6;--line:#d7ddd8;--teal:#176b70;--soft:#edf7f4;--orange:#c86d31;--warm:#fff4e9;--blue:#2d5f8b;--violet:#70508d}body{max-width:950px;margin:auto;padding:32px;color:var(--ink);background:var(--paper);font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid var(--line);padding:24px 0}h3{margin-top:2em;color:var(--teal)}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.65em;text-align:left;vertical-align:top}.card{border-left:5px solid var(--teal);background:var(--soft);padding:16px;margin:18px 0}.warn{border-left-color:var(--orange);background:var(--warm)}a{color:var(--teal)}.flow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:20px 0;padding:18px;border:1px solid var(--line);border-radius:12px;background:#fff}.node{padding:10px 13px;border:2px solid var(--teal);border-radius:9px;background:var(--soft);text-align:center;min-width:92px}.node small{display:block;color:#40545b}.arrow{font:700 24px/1 sans-serif;color:var(--orange)}.fork{display:grid;grid-template-columns:auto 36px 1fr 36px auto;align-items:center;gap:9px;margin:20px 0;padding:18px;border:1px solid var(--line);border-radius:12px;background:#fff}.branches{display:grid;gap:14px}.branch{display:flex;align-items:center;gap:8px}.multiply{border-color:var(--violet);background:#f5effa}.down{border-color:var(--blue);background:#edf4fb}.legend{font-size:.92em;color:#51636a}.formula{font:1.05em/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;background:#f1f4f2;padding:14px;border-radius:8px}@media(max-width:720px){.fork{grid-template-columns:1fr}.fork>.arrow{transform:rotate(90deg);text-align:center}.branch{flex-wrap:wrap}.node{min-width:0}.flow{align-items:stretch}.flow .arrow{align-self:center}}</style></head><body>
 <h1>0005：每个 token 先归一化，再经过带门控的特征变换</h1>
 <p>本课实现 decoder 中两个不混合 token 位置的组件：RMSNorm 和 gated FFN。RMSNorm 调整每个 token 向量的整体尺度；gated FFN 用两个并行投影产生“门”和“内容”，逐元素相乘后再投影回 hidden size。</p>
 <section><h2>1. 符号与目标</h2><table><tr><th>符号</th><th>英文</th><th>含义</th></tr><tr><td><code>B</code></td><td>Batch size</td><td>一次处理的序列数量。</td></tr><tr><td><code>S</code></td><td>Sequence length</td><td>每条序列中的 token 数。</td></tr><tr><td><code>H</code></td><td>Hidden size</td><td>每个 token 的输入/输出特征数。</td></tr><tr><td><code>I</code></td><td>Intermediate size</td><td>FFN 内部扩展后的特征数。</td></tr><tr><td><code>ε</code></td><td>epsilon</td><td>防止除零的很小正数，代码名通常是 <code>eps</code>。</td></tr><tr><td><code>γ</code></td><td>gamma</td><td>RMSNorm 的逐特征可训练缩放参数，代码中叫 <code>weight</code>。</td></tr></table><p><strong>输入：</strong><code>x.shape=[B,S,H]</code>。<strong>本节成果：</strong>实现 RMSNorm 和 gated FFN，保持输出 shape 为 <code>[B,S,H]</code>，并与 PyTorch/显式 reference 结果在容差内一致。</p></section>
@@ -20,11 +20,97 @@ output = x / rms(x) * γ</pre><p>乘法、除法和平方都对元素执行；<c
         variance = x.float().pow(2).mean(dim=-1, keepdim=True)
         normalized = x.float() * torch.rsqrt(variance + self.eps)
         return self.weight * normalized.to(input_dtype)</pre><p><code>variance</code> 在这里是平方平均值，shape 为 <code>[B,S,1]</code>；<code>keepdim=True</code> 保留最后一个长度为 1 的轴，使它能按广播规则除到 <code>[B,S,H]</code>。<code>rsqrt(v)</code> 表示 <code>1/sqrt(v)</code>。</p><p>中间转 float32 是常见的数值稳定做法，最后转回输入 dtype。weight 的 shape 是 <code>[H]</code>，会广播到每个 batch、每个 token。</p></section>
-<section><h2>4. Gated FFN 的四步</h2><p><code>FFN</code> 是 feed-forward network（前馈网络）。这里使用 gated FFN（带门控前馈网络）。给定 <code>x.shape=[B,S,H]</code>：</p><pre>gate_raw = gate_proj(x)          # [B,S,H] -> [B,S,I]
-gate     = SiLU(gate_raw)        # [B,S,I]
-up       = up_proj(x)            # [B,S,H] -> [B,S,I]
-mixed    = gate * up             # [B,S,I]，逐元素乘法
-output   = down_proj(mixed)      # [B,S,I] -> [B,S,H]</pre><p><code>SiLU</code> 是 sigmoid linear unit，逐元素计算 <code>SiLU(z)=z*sigmoid(z)</code>；<code>sigmoid</code> 把数值压到 0 与 1 之间。这里 gate 路径决定每个 intermediate 特征通过多少，up 路径提供被门控的内容。</p><div class="card warn"><code>*</code> 是逐元素乘法，不是矩阵乘法。gate 与 up 必须具有相同的 <code>[B,S,I]</code> shape。</div></section>
+<section><h2>4. 从普通 FFN 到 Gated FFN：结构、作用与逐步数据流</h2>
+<p>先不要急着看 <code>gate_proj</code>。必须先知道普通 <code>FFN</code> 在做什么。<code>FFN</code> 是 <strong>feed-forward network（前馈网络）</strong>：它对每个 token 的 hidden 向量独立做一次“升维 → 非线性变换 → 降维”。</p>
+
+<h3>4.1 普通 FFN 是什么</h3>
+<p>固定一个 token，输入是长度为 <code>H</code> 的向量 <code>x[b,s,:]</code>。普通 Transformer FFN 通常只有两个 Linear：</p>
+<div class="flow" role="img" aria-label="普通 FFN 结构图">
+  <div class="node">输入 x<small>[B,S,H]</small></div><div class="arrow">→</div>
+  <div class="node">up projection<small>H → I</small></div><div class="arrow">→</div>
+  <div class="node">activation<small>逐元素激活</small></div><div class="arrow">→</div>
+  <div class="node down">down projection<small>I → H</small></div><div class="arrow">→</div>
+  <div class="node">输出 y<small>[B,S,H]</small></div>
+</div>
+<p class="legend">图 1：普通 FFN 的结构图。<code>I</code> 是 intermediate size（中间特征数），通常比 <code>H</code> 大；它像在 C++ 中申请一块更宽的临时 feature buffer。类比只帮助理解 shape：实际 Linear 是矩阵运算，不是手工搬运数组。</p>
+<div class="formula">ordinary_ffn(x) = down_proj( activation(up_proj(x)) )</div>
+<table><tr><th>步骤</th><th>输入 → 输出</th><th>做什么</th><th>为什么需要</th></tr>
+<tr><td><code>up_proj</code></td><td><code>[B,S,H] → [B,S,I]</code></td><td>把每个 token 从 H 个特征映射到 I 个中间特征。</td><td>提供更宽的特征组合空间。</td></tr>
+<tr><td><code>activation</code></td><td><code>[B,S,I] → [B,S,I]</code></td><td>逐元素加入非线性。</td><td>如果连续两层都只有 Linear，它们可合并成一个 Linear，表达能力受限。</td></tr>
+<tr><td><code>down_proj</code></td><td><code>[B,S,I] → [B,S,H]</code></td><td>把临时的 I 个特征重新组合回 H 个特征。</td><td>恢复 decoder 主路径要求的 hidden size，才能与其他 <code>[B,S,H]</code> 结果相加或传给下一层。</td></tr></table>
+
+<h3>4.2 SiLU 做了什么</h3>
+<p><code>SiLU</code> 是 <strong>Sigmoid Linear Unit</strong>。它不是 Linear 层，而是对 tensor 中每个元素 <code>z</code> 独立计算：</p>
+<div class="formula">sigmoid(z) = 1 / (1 + exp(-z))<br>SiLU(z) = z × sigmoid(z)</div>
+<p><code>sigmoid(z)</code> 给出一个 0 到 1 之间的缩放因子；再乘回 <code>z</code>。因此 SiLU 会让不同数值通过不同程度，而且不像 ReLU 那样把所有负数直接变成 0。</p>
+<table><tr><th>z</th><th>sigmoid(z)</th><th>SiLU(z)</th><th>观察</th></tr><tr><td>-2</td><td>约 0.1192</td><td>约 -0.2384</td><td>负值被压小，但没有强制清零。</td></tr><tr><td>0</td><td>0.5</td><td>0</td><td>零仍然是零。</td></tr><tr><td>2</td><td>约 0.8808</td><td>约 1.7616</td><td>较大的正值大部分通过。</td></tr></table>
+
+<h3>4.3 Gated FFN 比普通 FFN 多了什么</h3>
+<p>普通 FFN 只有一条 <code>H → I</code> 路径。Gated FFN 把输入分成两条并行路径：</p>
+<ul><li><strong>gate 路径：</strong><code>gate_proj</code> 产生门控原始值，再经 SiLU 得到每个中间特征的调节系数。</li><li><strong>up 路径：</strong><code>up_proj</code> 产生要被调节的内容。</li></ul>
+<div class="fork" role="img" aria-label="Gated FFN 分支与汇合数据流图">
+  <div class="node">输入 x<small>[B,S,H]</small></div><div class="arrow">↗<br>↘</div>
+  <div class="branches">
+    <div class="branch"><div class="node">gate_proj<small>H → I</small></div><div class="arrow">→</div><div class="node">SiLU<small>得到 gate</small></div></div>
+    <div class="branch"><div class="node">up_proj<small>H → I</small></div><div class="arrow">→</div><div class="node">up<small>内容路径</small></div></div>
+  </div>
+  <div class="arrow">→</div><div class="node multiply">逐元素相乘 ×<small>gate * up<br>[B,S,I]</small></div>
+</div>
+<div class="flow" role="img" aria-label="Gated FFN 汇合后的输出数据流图">
+  <div class="node multiply">mixed<small>[B,S,I]</small></div><div class="arrow">→</div>
+  <div class="node down">down_proj<small>I → H</small></div><div class="arrow">→</div>
+  <div class="node">output<small>[B,S,H]</small></div>
+</div>
+<p class="legend">图 2：Gated FFN 数据流。两条分支读取同一个 token 的 x，在相同的 I 轴上逐元素汇合；它们不会混合不同 token。</p>
+
+<h3>4.4 第一步：gate_proj 产生 gate_raw</h3>
+<pre>gate_raw = gate_proj(x)     # [B,S,H] -> [B,S,I]</pre>
+<p><code>gate_proj</code> 是一个从 H 到 I 的 Linear。它学习“看到当前 token 的 H 个输入特征后，I 个中间通道分别应该得到什么门控原始值”。输出叫 <code>gate_raw</code>，因为它还没有经过 SiLU。</p>
+
+<h3>4.5 第二步：SiLU 把 gate_raw 变成 gate</h3>
+<pre>gate = SiLU(gate_raw)       # [B,S,I] -> [B,S,I]</pre>
+<p>SiLU 不改变 shape，只逐元素改变数值。这里的 <code>gate</code> 不是只能取 0 或 1 的硬开关：它可以接近 0、为正，也可以是较小的负数。因此更准确的理解是“对每个中间特征做输入相关的连续调节”。</p>
+
+<h3>4.6 第三步：up_proj 产生内容 up</h3>
+<pre>up = up_proj(x)             # [B,S,H] -> [B,S,I]</pre>
+<p><code>up_proj</code> 也是 H 到 I 的 Linear，但它有自己独立的 weight。它负责生成 I 个候选内容特征。名称中的 <code>up</code> 表示从 H 扩展到 I，不表示数值一定变大。</p>
+
+<h3>4.7 第四步：gate 与 up 逐元素形成 mixed</h3>
+<pre>mixed = gate * up           # [B,S,I] * [B,S,I] -> [B,S,I]</pre>
+<p>这里的 <code>*</code> 是 Hadamard product（逐元素乘法）。对固定位置 <code>[b,s,i]</code>：</p>
+<div class="formula">mixed[b,s,i] = gate[b,s,i] × up[b,s,i]</div>
+<p>它不是矩阵乘法，因为目标不是把 I 个特征互相求和，而是让第 i 个 gate 调节第 i 个内容特征。两边必须具有相同的 <code>[B,S,I]</code> shape。</p>
+
+<h3>4.8 第五步：down_proj 回到 hidden size</h3>
+<pre>output = down_proj(mixed)   # [B,S,I] -> [B,S,H]</pre>
+<p><code>down_proj</code> 把 I 个已门控的中间特征重新组合成 H 个输出特征。若不投影回 H，输出就无法回到 decoder 的 <code>[B,S,H]</code> 主路径。</p>
+
+<h3>4.9 用一个 token 追踪完整数值</h3>
+<p>假设某个 token 经两个 H→I 投影后，<code>I=3</code>：</p>
+<pre>gate_raw = [-2.0000,  0.0000, 2.0000]
+gate     = SiLU(gate_raw)
+         = [-0.2384,  0.0000, 1.7616]
+up       = [ 3.0000, -4.0000, 0.5000]
+mixed    = gate * up
+         = [-0.7152, -0.0000, 0.8808]</pre>
+<p>再令 <code>H=2</code>，为便于手算，给定 <code>down_proj.weight</code>（PyTorch shape 是 <code>[H=2,I=3]</code>）：</p>
+<pre>down_proj.weight = [[1.0, 0.0, -1.0],
+                    [0.5, 1.0,  0.0]]
+
+output[0] = 1.0*(-0.7152) + 0.0*0 + (-1.0)*0.8808 = -1.5960
+output[1] = 0.5*(-0.7152) + 1.0*0 + 0.0*0.8808    = -0.3576
+output    = [-1.5960, -0.3576]                    # [H=2]</pre>
+
+<h3>4.10 相比普通 FFN，区别和提升在哪里</h3>
+<table><tr><th>比较项</th><th>普通 FFN</th><th>Gated FFN / SwiGLU</th></tr>
+<tr><td>H→I 路径</td><td>一条</td><td>两条：gate 与 up</td></tr>
+<tr><td>核心公式</td><td><code>down(act(up(x)))</code></td><td><code>down(SiLU(gate(x))*up(x))</code></td></tr>
+<tr><td>中间特征控制</td><td>只有 activation 改变单一路径</td><td>gate 根据同一输入逐通道调节另一条内容路径</td></tr>
+<tr><td>Linear 参数量<br>忽略 bias、使用相同 I</td><td><code>H*I + I*H = 2HI</code></td><td><code>H*I + H*I + I*H = 3HI</code></td></tr>
+<tr><td>代价</td><td>较低</td><td>相同 I 下，多一个 H→I 投影，参数量与主要矩阵计算约增加 50%</td></tr></table>
+<p><strong>提升来自哪里：</strong>Gated FFN 不只是对一组中间值做固定形式的激活，而是让一条从输入计算出的 gate 路径逐通道调节另一条内容路径，提供更灵活的输入相关特征选择。<a href="https://arxiv.org/abs/2002.05202">GLU Variants Improve Transformer</a> 报告，SwiGLU 等 GLU 变体在其 Transformer 实验中优于所比较的 ReLU/GELU FFN。</p>
+<div class="card warn"><strong>不要把论文结果理解成无条件保证。</strong>Gated FFN 在相同 H、I 下更贵；实际模型可能调整 I，使总参数量或计算预算更接近。具体收益还取决于模型规模、训练数据和训练设置。Qwen3 使用的正是 <code>down_proj(SiLU(gate_proj(x))*up_proj(x))</code> 这条数据流。</div>
+</section>
 <section><h2>5. Linear weight 的 shape 不要写反</h2><p>PyTorch <code>nn.Linear(in_features, out_features, bias=False)</code> 的 weight shape 是 <code>[out_features,in_features]</code>：</p><table><tr><th>层</th><th>逻辑变换</th><th>weight shape</th><th>输出 shape</th></tr><tr><td>gate_proj</td><td>H → I</td><td>[I,H]</td><td>[B,S,I]</td></tr><tr><td>up_proj</td><td>H → I</td><td>[I,H]</td><td>[B,S,I]</td></tr><tr><td>down_proj</td><td>I → H</td><td>[H,I]</td><td>[B,S,H]</td></tr></table><p>这与前面课程使用的数学记号 <code>X @ W</code> 中 W 常写成 <code>[in,out]</code> 不同。PyTorch Linear 内部按其 API 存储为 <code>[out,in]</code>，等价计算会使用 weight 的转置关系。</p></section>
 <section><h2>6. 完整 Module</h2><pre>class GatedFFN(nn.Module):
     def __init__(self, hidden_size, intermediate_size):
