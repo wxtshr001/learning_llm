@@ -8,7 +8,7 @@
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
-0005 初版的 gated FFN 章节过于简略，已按学习者反馈重写：先讲普通 FFN，再逐步解释 SiLU、gate_proj、up_proj、逐元素 mixed、down_proj，并增加结构图、数据流图、完整数值追踪及收益/成本对比。
+0005 初版不只 gated FFN 章节过于简略，其他章节也存在“结论先行”。现已完成全课审查与重写：补充进入条件、rank/axis、RMSNorm 动机与完整数据流、广播索引、dtype 边界、Linear 逐元素映射、Module/梯度路径、token 独立性、parity 流程、Qwen 映射、练习证据和指定阅读范围。
 
 ## 已完成
 

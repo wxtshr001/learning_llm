@@ -43,6 +43,7 @@ H = 2
 2. 每个输出数由输入中的哪些元素计算？
 3. RMSNorm weight 的 shape 是什么，怎样广播？
 4. RMSNorm 最终输出 shape 是什么？
+5. 为什么这里的结果应叫 mean square，而不是 variance？
 
 ## 3. Gated FFN shape（关键题，25 分）
 
@@ -73,6 +74,7 @@ up             = [2.0, -3.0, 4.0]
 1. GatedFFN 的哪些对象会出现在 `named_parameters()`？写出名字。
 2. 对 output 计算 loss 并 backward 后，为什么 gate_proj 和 up_proj 都应有 grad？
 3. “测试通过”为什么还需要 reference parity，而不能只检查没有异常？
+4. 做 parity 时，为什么 candidate 与 reference 必须使用相同输入、weight 和 eps？
 
 ## 6. 迁移到 decoder（10 分）
 

@@ -2,9 +2,11 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0005 速查：RMSNorm 与 Gated FFN</title><style>body{max-width:900px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:16px/1.65 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:20px 0}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d7ddd8;padding:.6em;text-align:left}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:16px;overflow:auto;border-radius:8px}.card{border-left:5px solid #176b70;background:#edf7f4;padding:14px}</style></head><body>
 <h1>RMSNorm / Gated FFN 速查</h1>
 <section><h2>符号</h2><table><tr><td>B</td><td>batch size</td></tr><tr><td>S</td><td>sequence length</td></tr><tr><td>H</td><td>hidden size</td></tr><tr><td>I</td><td>intermediate size</td></tr><tr><td>ε</td><td>防除零 epsilon</td></tr><tr><td>γ</td><td>RMSNorm weight，[H]</td></tr></table></section>
-<section><h2>RMSNorm</h2><pre>variance = x.float().pow(2).mean(-1, keepdim=True)  # [B,S,1]
-y = x * rsqrt(variance + eps)                       # [B,S,H]
-out = y * weight                                    # weight [H]</pre><p>沿最后 H 轴；不减均值；shape 不变。</p></section>
+<section><h2>RMSNorm</h2><pre>input_dtype = x.dtype
+xf = x.float()
+mean_square = xf.pow(2).mean(-1, keepdim=True)      # [B,S,1]
+y = xf * rsqrt(mean_square + eps)                   # [B,S,H]
+out = (y * weight.float()).to(input_dtype)           # weight [H]</pre><p>沿最后 H 轴；不减均值；shape 与输入 dtype 不变。mean square 不是 variance。</p></section>
 <section><h2>普通 FFN → Gated FFN</h2><pre>ordinary = down_proj(activation(up_proj(x)))
 
 gate = silu(gate_proj(x))  # [B,S,I]

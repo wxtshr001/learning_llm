@@ -57,6 +57,17 @@ def run_tests() -> None:
     zero_output = custom_norm(torch.zeros_like(x))
     assert torch.isfinite(zero_output).all()
 
+    if device.type == "cuda":
+        half_x = x.to(torch.float16)
+        half_custom = TinyRMSNorm(h, eps=1e-6).to(device=device, dtype=torch.float16)
+        half_reference = nn.RMSNorm(h, eps=1e-6).to(device=device, dtype=torch.float16)
+        with torch.no_grad():
+            half_reference.weight.copy_(half_custom.weight)
+        half_candidate = half_custom(half_x)
+        half_expected = half_reference(half_x)
+        assert half_candidate.dtype == half_x.dtype
+        torch.testing.assert_close(half_candidate, half_expected, rtol=1e-3, atol=1e-3)
+
     ffn = GatedFFN(h, intermediate).to(device)
     _fill_weights(ffn)
     assert ffn.gate_proj.weight.shape == (intermediate, h)
@@ -81,6 +92,8 @@ def run_tests() -> None:
     print("device:", device)
     print("RMSNorm output shape:", tuple(candidate_norm.shape))
     print("RMSNorm max absolute error:", (candidate_norm - reference).abs().max().item())
+    if device.type == "cuda":
+        print("RMSNorm float16 output dtype preserved:", half_candidate.dtype)
     print("gate/up shape [B,S,I]:", tuple(gate.shape), tuple(up.shape))
     print("Gated FFN output shape:", tuple(module_output.shape))
     print("Gated FFN max absolute error:", (module_output - explicit_output).abs().max().item())

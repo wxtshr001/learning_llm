@@ -16,9 +16,10 @@ class TinyRMSNorm(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         input_dtype = x.dtype
         x_float = x.float()
-        variance = x_float.pow(2).mean(dim=-1, keepdim=True)
-        normalized = x_float * torch.rsqrt(variance + self.eps)
-        return self.weight * normalized.to(input_dtype)
+        mean_square = x_float.pow(2).mean(dim=-1, keepdim=True)
+        normalized = x_float * torch.rsqrt(mean_square + self.eps)
+        scaled = normalized * self.weight.float()
+        return scaled.to(input_dtype)
 
 
 class GatedFFN(nn.Module):
@@ -75,9 +76,10 @@ def main() -> None:
         reference_norm.weight.copy_(custom_norm.weight)
     norm_output = custom_norm(x)
     norm_reference = reference_norm(x)
-    variance = x.float().pow(2).mean(dim=-1, keepdim=True)
+    mean_square = x.float().pow(2).mean(dim=-1, keepdim=True)
     print("x shape [B,S,H]:", tuple(x.shape))
-    print("variance shape [B,S,1]:", tuple(variance.shape))
+    print("mean_square values:", mean_square.flatten().tolist())
+    print("mean_square shape [B,S,1]:", tuple(mean_square.shape))
     print("weight shape [H]:", tuple(custom_norm.weight.shape))
     print("output shape [B,S,H]:", tuple(norm_output.shape))
     print("first token output:", norm_output[0, 0].tolist())
@@ -99,6 +101,11 @@ def main() -> None:
     print("down_proj.weight [H,I]:", tuple(ffn.down_proj.weight.shape))
     print("gate/up/mixed [B,S,I]:", tuple(gate.shape), tuple(up.shape), tuple(mixed.shape))
     print("output [B,S,H]:", tuple(output.shape))
+    print("first token gate_raw:", gate_raw[0, 0].tolist())
+    print("first token gate after SiLU:", gate[0, 0].tolist())
+    print("first token up:", up[0, 0].tolist())
+    print("first token mixed:", mixed[0, 0].tolist())
+    print("first token output:", output[0, 0].tolist())
     ffn_error = (module_output - output).abs().max().item()
     print("Gated FFN max absolute error:", ffn_error)
     torch.testing.assert_close(module_output, output, rtol=1e-6, atol=1e-7)

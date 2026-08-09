@@ -1,25 +1,54 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0005：RMSNorm 与 Gated FFN</title><style>:root{--ink:#17232a;--paper:#fbfaf6;--line:#d7ddd8;--teal:#176b70;--soft:#edf7f4;--orange:#c86d31;--warm:#fff4e9;--blue:#2d5f8b;--violet:#70508d}body{max-width:950px;margin:auto;padding:32px;color:var(--ink);background:var(--paper);font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid var(--line);padding:24px 0}h3{margin-top:2em;color:var(--teal)}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.65em;text-align:left;vertical-align:top}.card{border-left:5px solid var(--teal);background:var(--soft);padding:16px;margin:18px 0}.warn{border-left-color:var(--orange);background:var(--warm)}a{color:var(--teal)}.flow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:20px 0;padding:18px;border:1px solid var(--line);border-radius:12px;background:#fff}.node{padding:10px 13px;border:2px solid var(--teal);border-radius:9px;background:var(--soft);text-align:center;min-width:92px}.node small{display:block;color:#40545b}.arrow{font:700 24px/1 sans-serif;color:var(--orange)}.fork{display:grid;grid-template-columns:auto 36px 1fr 36px auto;align-items:center;gap:9px;margin:20px 0;padding:18px;border:1px solid var(--line);border-radius:12px;background:#fff}.branches{display:grid;gap:14px}.branch{display:flex;align-items:center;gap:8px}.multiply{border-color:var(--violet);background:#f5effa}.down{border-color:var(--blue);background:#edf4fb}.legend{font-size:.92em;color:#51636a}.formula{font:1.05em/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;background:#f1f4f2;padding:14px;border-radius:8px}@media(max-width:720px){.fork{grid-template-columns:1fr}.fork>.arrow{transform:rotate(90deg);text-align:center}.branch{flex-wrap:wrap}.node{min-width:0}.flow{align-items:stretch}.flow .arrow{align-self:center}}</style></head><body>
 <h1>0005：每个 token 先归一化，再经过带门控的特征变换</h1>
-<p>本课实现 decoder 中两个不混合 token 位置的组件：RMSNorm 和 gated FFN。RMSNorm 调整每个 token 向量的整体尺度；gated FFN 用两个并行投影产生“门”和“内容”，逐元素相乘后再投影回 hidden size。</p>
-<section><h2>1. 符号与目标</h2><table><tr><th>符号</th><th>英文</th><th>含义</th></tr><tr><td><code>B</code></td><td>Batch size</td><td>一次处理的序列数量。</td></tr><tr><td><code>S</code></td><td>Sequence length</td><td>每条序列中的 token 数。</td></tr><tr><td><code>H</code></td><td>Hidden size</td><td>每个 token 的输入/输出特征数。</td></tr><tr><td><code>I</code></td><td>Intermediate size</td><td>FFN 内部扩展后的特征数。</td></tr><tr><td><code>ε</code></td><td>epsilon</td><td>防止除零的很小正数，代码名通常是 <code>eps</code>。</td></tr><tr><td><code>γ</code></td><td>gamma</td><td>RMSNorm 的逐特征可训练缩放参数，代码中叫 <code>weight</code>。</td></tr></table><p><strong>输入：</strong><code>x.shape=[B,S,H]</code>。<strong>本节成果：</strong>实现 RMSNorm 和 gated FFN，保持输出 shape 为 <code>[B,S,H]</code>，并与 PyTorch/显式 reference 结果在容差内一致。</p></section>
-<section><h2>2. RMSNorm 先看一个具体向量</h2><p>一个 token 的 hidden 向量为 <code>x=[1,2,-1,-2]</code>，所以 <code>H=4</code>。先暂时令 <code>ε=0</code>、<code>γ=[1,1,1,1]</code>：</p><pre>平方:        [1, 4, 1, 4]
-平方平均:    (1+4+1+4) / 4 = 2.5
-RMS:         sqrt(2.5) ≈ 1.5811
-归一化结果:  x / 1.5811
-             ≈ [0.6325, 1.2649, -0.6325, -1.2649]</pre><p><code>RMS</code> 是 root mean square（均方根）：先平方、求平均、再开平方。一般公式：</p><pre>rms(x) = sqrt(mean(x^2) + ε)
-output = x / rms(x) * γ</pre><p>乘法、除法和平方都对元素执行；<code>mean</code> 只沿最后一个 H 轴求平均。对于 <code>[B,S,H]</code>，每个 <code>[H]</code> token 向量各算自己的 rms，B 和 S 不互相混合。</p><div class="card">RMSNorm 不减去均值；它只用平方均值控制向量尺度。shape 从头到尾保持 <code>[B,S,H]</code>。</div></section>
-<section><h2>3. PyTorch 实现与参数 shape</h2><pre>class TinyRMSNorm(nn.Module):
+<p>本课实现 decoder（逐步生成 token 的模型主体）中两个不混合 token 位置的组件：RMSNorm 和 gated FFN。RMSNorm 调整每个 token 向量的整体尺度；gated FFN 用两个并行投影产生“门”和“内容”，逐元素相乘后再投影回 hidden size。这里的 decoder 主路径可先理解为：各层之间持续传递 shape 为 <code>[B,S,H]</code> 的 hidden state（隐藏特征 tensor）。</p>
+<section><h2>1. 进入条件、符号、axis 与本课成果</h2><div class="card"><strong>本课可以依赖：</strong>你已经证明会做 Linear 逐元素计算、读写 <code>[B,S,H]</code> shape、使用 <code>nn.Module</code>/<code>nn.Parameter</code>、执行 backward，并处理 dtype/device。<br><strong>本课不能假设：</strong>你还没有证明掌握 RMSNorm、last-axis reduction、RMSNorm weight 广播或 gated FFN。</div><table><tr><th>符号</th><th>英文</th><th>含义</th></tr><tr><td><code>B</code></td><td>Batch size</td><td>一次处理的序列数量。</td></tr><tr><td><code>S</code></td><td>Sequence length</td><td>每条序列中的 token 数。</td></tr><tr><td><code>H</code></td><td>Hidden size</td><td>每个 token 的输入/输出特征数。</td></tr><tr><td><code>I</code></td><td>Intermediate size</td><td>FFN 内部扩展后的特征数。</td></tr><tr><td><code>ε</code></td><td>epsilon</td><td>防止除零的很小正数，代码名通常是 <code>eps</code>。</td></tr><tr><td><code>γ</code></td><td>gamma</td><td>RMSNorm 的逐特征可训练缩放参数，代码中叫 <code>weight</code>。</td></tr></table><p>本课输入 <code>x.shape=[B,S,H]</code> 是 rank 3 tensor：rank 表示轴的数量，所以这里有 3 个 axis。</p><table><tr><th>axis</th><th>数字例子 <code>[B=1,S=2,H=4]</code></th><th>业务含义</th></tr><tr><td>axis 0</td><td>长度 1</td><td>1 条序列。</td></tr><tr><td>axis 1</td><td>长度 2</td><td>每条序列有 2 个 token。</td></tr><tr><td>axis 2，也写 <code>dim=-1</code></td><td>长度 4</td><td>每个 token 有 4 个 hidden 特征；<code>-1</code> 表示最后一轴。</td></tr></table><p><strong>本课成果：</strong>实现 RMSNorm 和 gated FFN，使输入、输出都为 <code>[B,S,H]</code>；还能解释每个中间 tensor 的 shape、一个具体元素从哪里来，以及为什么结果与官方/reference 实现一致。</p></section>
+<section><h2>2. RMSNorm：为什么做、怎样做、每一步改变什么</h2>
+<p><code>RMSNorm</code> 是 <strong>Root Mean Square Normalization（均方根归一化）</strong>。先看它解决的直观问题：两个 token 向量可能方向相同，但整体数值尺度差很多。</p>
+<pre>x1 = [ 1,  2, -1, -2]
+x2 = [10, 20,-10,-20] = 10 * x1</pre>
+<p><code>x2</code> 的每个元素都是 <code>x1</code> 的 10 倍。暂时令 <code>ε=0</code>，RMSNorm 会分别计算它们的整体尺度并除掉，因此二者在“除以 RMS”后相同。这一步控制“整个 hidden 向量有多大”，同时保留各特征之间的相对比例和正负号；后面的可训练 γ 还可以继续逐特征调整。</p>
+<div class="flow" role="img" aria-label="RMSNorm 数据流图"><div class="node">x<small>[H]</small></div><div class="arrow">→</div><div class="node">逐元素平方<small>x²</small></div><div class="arrow">→</div><div class="node">求平方平均<small>mean square</small></div><div class="arrow">→</div><div class="node">开平方<small>RMS</small></div><div class="arrow">→</div><div class="node">x / RMS<small>统一尺度</small></div><div class="arrow">→</div><div class="node">乘 γ<small>逐特征缩放</small></div></div>
+<h3>2.1 用一个 token 完整手算</h3><p>一个 token 的 hidden 向量为 <code>x=[1,2,-1,-2]</code>，所以 <code>H=4</code>。先令 <code>ε=0</code>、<code>γ=[1,1,1,1]</code>：</p>
+<pre>步骤 1，平方:      [1, 4, 1, 4]
+步骤 2，平方平均:  (1+4+1+4) / H = 10/4 = 2.5
+步骤 3，RMS:       sqrt(2.5) ≈ 1.5811
+步骤 4，除以 RMS:  x / 1.5811
+                   ≈ [0.6325, 1.2649, -0.6325, -1.2649]
+步骤 5，乘 γ:      结果不变，因为此时 γ 全为 1</pre>
+<h3>2.2 epsilon 和 gamma 各自做什么</h3><p>若 <code>x=[0,0,0,0]</code>，RMS 也是 0，直接除会产生无效数值。<code>ε</code>（epsilon）是加入分母内部的小正数：</p><div class="formula">rms(x) = sqrt(mean(x²) + ε)<br>output[h] = x[h] / rms(x) × γ[h]</div>
+<p><code>γ</code> 是长度为 H 的可训练 weight。比如归一化结果前两个值为 <code>[0.6325,1.2649]</code>，而 <code>γ</code> 前两个值为 <code>[2,0.5]</code>，相乘后变成 <code>[1.2650,0.6325]</code>。因此 RMSNorm 先统一整体尺度，再允许模型为每个 hidden 特征学习不同缩放。</p>
+<div class="card warn"><strong>RMSNorm 不做什么：</strong>它不减去均值，也不混合不同 token。它与 LayerNorm 不是同一个公式。本课只要求 RMSNorm，不要求先掌握 LayerNorm。</div></section>
+<section><h2>3. RMSNorm 的 axis、广播、dtype 与 PyTorch 实现</h2>
+<h3>3.1 从具体 <code>[B=1,S=2,H=4]</code> 看 reduction</h3>
+<pre>x = [[[ 1.0,  2.0, -1.0, -2.0],
+      [ 0.5, -0.5,  1.5, -1.5]]]
+shape = [1,2,4]</pre>
+<p><code>mean(dim=-1)</code> 是 reduction（归约）：把最后 H 轴的 4 个数汇总成 1 个数。每个 token 独立计算：</p>
+<pre>token 0 mean_square = (1 + 4 + 1 + 4) / 4 = 2.50
+token 1 mean_square = (0.25 + 0.25 + 2.25 + 2.25) / 4 = 1.25</pre>
+<p>使用 <code>keepdim=True</code> 后，结果不是 <code>[1,2]</code>，而是 <code>[1,2,1]</code>：</p>
+<pre>mean_square = [[[2.50],
+                [1.25]]]       # shape [B=1,S=2,1]</pre>
+<p>最后长度 1 会广播到 H=4。具体元素映射为：</p><div class="formula">normalized[b,s,h] = x[b,s,h] × rsqrt(mean_square[b,s,0] + eps)</div>
+<p>例如 <code>x[0,1,2]=1.5</code> 使用的是同一个 token 的 <code>mean_square[0,1,0]=1.25</code>，不会使用 token 0 的 2.50。可把它类比为 C++ 两层外循环固定 <code>b,s</code>，先扫描 H 个连续元素求平方平均，再扫描同一段 H 元素归一化。</p>
+<h3>3.2 逐行读实现</h3>
+<pre>class TinyRMSNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         super().__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))  # [H]
-        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(hidden_size))  # gamma, [H]
+        self.eps = eps                                       # 普通 Python float
 
     def forward(self, x):
         input_dtype = x.dtype
-        variance = x.float().pow(2).mean(dim=-1, keepdim=True)
-        normalized = x.float() * torch.rsqrt(variance + self.eps)
-        return self.weight * normalized.to(input_dtype)</pre><p><code>variance</code> 在这里是平方平均值，shape 为 <code>[B,S,1]</code>；<code>keepdim=True</code> 保留最后一个长度为 1 的轴，使它能按广播规则除到 <code>[B,S,H]</code>。<code>rsqrt(v)</code> 表示 <code>1/sqrt(v)</code>。</p><p>中间转 float32 是常见的数值稳定做法，最后转回输入 dtype。weight 的 shape 是 <code>[H]</code>，会广播到每个 batch、每个 token。</p></section>
+        x_float = x.float()                                  # 中间计算用 float32
+        mean_square = x_float.pow(2).mean(dim=-1, keepdim=True)
+        normalized = x_float * torch.rsqrt(mean_square + self.eps)
+        scaled = normalized * self.weight.float()            # [B,S,H] * [H]
+        return scaled.to(input_dtype)</pre>
+<table><tr><th>代码</th><th>含义</th><th>shape</th></tr><tr><td><code>nn.Parameter(ones(H))</code></td><td>注册可训练的 γ；会出现在 <code>named_parameters()</code>。</td><td><code>[H]</code></td></tr><tr><td><code>pow(2)</code></td><td>每个元素平方，不改变位置。</td><td><code>[B,S,H]</code></td></tr><tr><td><code>mean(dim=-1,keepdim=True)</code></td><td>每个 token 的 H 个平方值归约成 1 个数。</td><td><code>[B,S,1]</code></td></tr><tr><td><code>rsqrt(v)</code></td><td>计算 <code>1/sqrt(v)</code>，等价于“除以 RMS”所需的倒数。</td><td><code>[B,S,1]</code></td></tr><tr><td><code>* weight</code></td><td><code>[H]</code> 广播到每个 batch、每个 token。</td><td><code>[B,S,H]</code></td></tr></table>
+<p><code>eps</code> 只是配置值，不是 Parameter。中间转 float32 是为了让平方、求和和倒数平方根更稳定；最后在所有乘法完成后转回 <code>input_dtype</code>，才严格保证返回 dtype 与输入一致。</p>
+<div class="card warn">变量应叫 <code>mean_square</code>（平方平均），而不是统计学上的 variance（方差）。RMSNorm 没有先减均值，所以这两者不能混称。</div></section>
 <section><h2>4. 从普通 FFN 到 Gated FFN：结构、作用与逐步数据流</h2>
 <p>先不要急着看 <code>gate_proj</code>。必须先知道普通 <code>FFN</code> 在做什么。<code>FFN</code> 是 <strong>feed-forward network（前馈网络）</strong>：它对每个 token 的 hidden 向量独立做一次“升维 → 非线性变换 → 降维”。</p>
 
@@ -111,8 +140,22 @@ output    = [-1.5960, -0.3576]                    # [H=2]</pre>
 <p><strong>提升来自哪里：</strong>Gated FFN 不只是对一组中间值做固定形式的激活，而是让一条从输入计算出的 gate 路径逐通道调节另一条内容路径，提供更灵活的输入相关特征选择。<a href="https://arxiv.org/abs/2002.05202">GLU Variants Improve Transformer</a> 报告，SwiGLU 等 GLU 变体在其 Transformer 实验中优于所比较的 ReLU/GELU FFN。</p>
 <div class="card warn"><strong>不要把论文结果理解成无条件保证。</strong>Gated FFN 在相同 H、I 下更贵；实际模型可能调整 I，使总参数量或计算预算更接近。具体收益还取决于模型规模、训练数据和训练设置。Qwen3 使用的正是 <code>down_proj(SiLU(gate_proj(x))*up_proj(x))</code> 这条数据流。</div>
 </section>
-<section><h2>5. Linear weight 的 shape 不要写反</h2><p>PyTorch <code>nn.Linear(in_features, out_features, bias=False)</code> 的 weight shape 是 <code>[out_features,in_features]</code>：</p><table><tr><th>层</th><th>逻辑变换</th><th>weight shape</th><th>输出 shape</th></tr><tr><td>gate_proj</td><td>H → I</td><td>[I,H]</td><td>[B,S,I]</td></tr><tr><td>up_proj</td><td>H → I</td><td>[I,H]</td><td>[B,S,I]</td></tr><tr><td>down_proj</td><td>I → H</td><td>[H,I]</td><td>[B,S,H]</td></tr></table><p>这与前面课程使用的数学记号 <code>X @ W</code> 中 W 常写成 <code>[in,out]</code> 不同。PyTorch Linear 内部按其 API 存储为 <code>[out,in]</code>，等价计算会使用 weight 的转置关系。</p></section>
-<section><h2>6. 完整 Module</h2><pre>class GatedFFN(nn.Module):
+<section><h2>5. Linear weight 为什么是 <code>[out,in]</code></h2><p>PyTorch <code>nn.Linear(in_features, out_features, bias=False)</code> 把 weight 存成 <code>[out_features,in_features]</code>。先用 <code>H=2,I=3</code> 的 gate_proj 手算：</p>
+<pre>x = [4,5]                              # [H=2]
+gate_proj.weight = [[1,0],             # 输出特征 0 使用的一整行
+                    [0,2],             # 输出特征 1 使用的一整行
+                    [3,1]]             # 输出特征 2 使用的一整行
+shape = [I=3,H=2]
+
+gate_raw[0] = 1*4 + 0*5 = 4
+gate_raw[1] = 0*4 + 2*5 = 10
+gate_raw[2] = 3*4 + 1*5 = 17
+gate_raw = [4,10,17]                   # [I=3]</pre>
+<div class="formula">output[...,i] = Σ<sub>h=0..H-1</sub> input[...,h] × weight[i,h]</div>
+<p>每一行 weight 产生一个输出特征，所以第一轴是 out，第二轴是 in。可类比 C++ 中一张连续的二维系数表：第 i 行保存“怎样从全部 H 个输入算出第 i 个输出”。PyTorch 内部等价于 <code>x @ weight.T</code>；这就是为什么你之前熟悉的数学 W 常写 <code>[in,out]</code>，而 <code>Linear.weight</code> 存成 <code>[out,in]</code>。</p>
+<table><tr><th>层</th><th>构造</th><th>weight shape</th><th>tensor 数据流</th></tr><tr><td>gate_proj</td><td><code>Linear(H,I)</code></td><td><code>[I,H]</code></td><td><code>[B,S,H] → [B,S,I]</code></td></tr><tr><td>up_proj</td><td><code>Linear(H,I)</code></td><td><code>[I,H]</code></td><td><code>[B,S,H] → [B,S,I]</code></td></tr><tr><td>down_proj</td><td><code>Linear(I,H)</code></td><td><code>[H,I]</code></td><td><code>[B,S,I] → [B,S,H]</code></td></tr></table>
+<div class="card warn">不要从变量名猜 weight shape。始终先写 <code>Linear(in_features,out_features)</code>，再按 PyTorch 规则得到 <code>weight=[out,in]</code>。</div></section>
+<section><h2>6. 完整 Module：构造、注册、forward 与 backward</h2><p><code>__init__</code> 负责创建长期存在的子模块和参数；<code>forward</code> 负责描述一次输入怎样流过这些子模块。调用 <code>ffn(x)</code> 时，<code>nn.Module</code> 会进入 <code>forward(x)</code>。</p><pre>class GatedFFN(nn.Module):
     def __init__(self, hidden_size, intermediate_size):
         super().__init__()
         self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
@@ -122,12 +165,40 @@ output    = [-1.5960, -0.3576]                    # [H=2]</pre>
     def forward(self, x):
         gate = torch.nn.functional.silu(self.gate_proj(x))
         up = self.up_proj(x)
-        return self.down_proj(gate * up)</pre><p>三个 Linear 都会被父 Module 注册，它们的 weight 都是 Parameter。backward 会沿 down、逐元素乘法、SiLU、gate/up 两条路径计算梯度。</p></section>
-<section><h2>7. 它是否混合 token</h2><p>RMSNorm 沿 H 轴处理每个 token；三个 Linear 也只变换最后一个特征轴。固定 <code>b</code>（batch 下标）和 <code>s</code>（token 下标）后，输出只依赖同一个 <code>x[b,s,:]</code>，不会读取另一个 token 的 <code>x[b,s2,:]</code>。token 之间的混合由 Attention 等组件完成，不是本课 FFN 的职责。</p></section>
-<section><h2>8. parity：不要只看“能运行”</h2><p><code>parity</code> 在本课程中表示参考实现与待测实现数值对齐。RMSNorm 与 <code>nn.RMSNorm</code> 使用相同 weight/eps；gated FFN 与显式 <code>F.linear + F.silu + multiply</code> 使用相同权重：</p><pre>max_error = (reference - candidate).abs().max().item()
-torch.testing.assert_close(reference, candidate, rtol=1e-5, atol=1e-6)</pre><p>还要检查 shape、dtype、device、参数 shape，以及 backward 后所有 Parameter 的 grad 是否存在且为有限数。</p></section>
-<section><h2>9. 与真实 Qwen 的连接</h2><p>Qwen 系列的 MLP 使用同样的结构：</p><pre>down_proj( act_fn(gate_proj(x)) * up_proj(x) )</pre><p>真实模型的 H、I 更大，dtype、kernel 和量化更复杂，但 shape 路径不变。第 0005 课建立的是以后阅读 Qwen MLP、对齐导出结果和定位 backend 数值问题的最小 reference。</p></section>
-<section><h2>10. 完成顺序</h2><ol><li>运行 <code>python exercises/0005_explore_rmsnorm_gated_ffn.py</code>。</li><li>对照每个中间 shape 和 parity error。</li><li>完成 <code>exercises/0005_rmsnorm_gated_ffn.py</code> 的 TODO，并运行测试。</li><li>查看 <a href="../reference/0005-rmsnorm-gated-ffn-cheatsheet.html">RMSNorm/Gated FFN 速查表</a>。</li><li>关闭资料，完成 <a href="../assessments/0005-rmsnorm-gated-ffn.md">0005 过关测试</a>。</li></ol><p>任何符号或 shape 不清楚时先问我。</p></section>
-<section><h2>11. 官方与一手资料</h2><ul><li><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html">PyTorch RMSNorm</a>：公式与 API。</li><li><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.SiLU.html">PyTorch SiLU</a>：激活函数定义。</li><li><a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Hugging Face Qwen3 implementation</a>：RMSNorm 与 MLP reference。</li><li><a href="https://arxiv.org/abs/2002.05202">GLU Variants Improve Transformer</a>：SwiGLU 一手论文。</li></ul><p>预计用时 90～120 分钟。</p></section>
+        return self.down_proj(gate * up)</pre>
+<table><tr><th>对象</th><th>是否 Parameter</th><th><code>named_parameters()</code> 中的名字</th></tr><tr><td><code>gate_proj.weight</code></td><td>是</td><td><code>gate_proj.weight</code></td></tr><tr><td><code>up_proj.weight</code></td><td>是</td><td><code>up_proj.weight</code></td></tr><tr><td><code>down_proj.weight</code></td><td>是</td><td><code>down_proj.weight</code></td></tr><tr><td><code>hidden_size</code>/<code>intermediate_size</code></td><td>否</td><td>只是构造时使用的整数</td></tr></table>
+<p><code>bias=False</code> 表示这三个 Linear 没有 bias Parameter，这是本课对齐 Qwen MLP 结构的选择，并不表示所有 Linear 都应该禁用 bias。</p>
+<div class="fork" role="img" aria-label="Gated FFN backward 梯度路径图"><div class="node">loss</div><div class="arrow">←</div><div class="node down">down_proj</div><div class="arrow">←</div><div class="node multiply">gate * up</div><div class="arrow">↖<br>↙</div><div class="branches"><div class="branch"><div class="node">SiLU</div><div class="arrow">←</div><div class="node">gate_proj</div></div><div class="branch"><div class="node">up_proj</div></div></div></div>
+<p>backward 从 loss 反向经过 down_proj 和逐元素乘法后分叉：一条到 up_proj，另一条经过 SiLU 到 gate_proj。因此只要 loss 依赖 output，三组 weight 都应得到 grad。梯度具体数值可能为 0，但 <code>grad is None</code> 表示根本没有建立到该参数的梯度路径。</p></section>
+
+<section><h2>7. 为什么 RMSNorm 和 FFN 不混合 token</h2><p>“不混合 token”不是指整个 tensor 只含一个 token，而是指固定输出位置 <code>[b,s,:]</code> 后，它只读取同一个输入位置 <code>x[b,s,:]</code>。</p>
+<table><tr><th>组件</th><th>读取范围</th><th>是否读取另一个 s</th></tr><tr><td>RMSNorm</td><td>固定 b、s，沿 H 轴读取 <code>x[b,s,0:H]</code></td><td>否</td></tr><tr><td>gate/up/down Linear</td><td>固定 b、s，矩阵只作用于最后特征轴</td><td>否</td></tr><tr><td>Attention</td><td>一个 token 可根据规则读取其他 token 的信息</td><td>是，这才承担 token mixing</td></tr></table>
+<p>用两个 token 做思想实验：</p><pre>x[0,0,:] = [1,2,3,4]
+x[0,1,:] = [5,6,7,8]
+
+只把第二个 token 改成 [-5,-6,-7,-8]：
+- RMSNorm/FFN 的 output[0,0,:] 应保持不变
+- output[0,1,:] 会改变</pre>
+<p>索引层面的原因是公式始终保留相同的 b、s：</p><div class="formula">ffn_output[b,s,h_out] = Σ<sub>i</sub> mixed[b,s,i] × down_weight[h_out,i]</div>
+<p>求和发生在 I 轴，不发生在 S 轴。以后看到一个新算子时，可用同样方法检查：公式是否对 token 下标 s 求和，或读取了其他 s。</p></section>
+
+<section><h2>8. parity：怎样证明“实现正确”，而不只是“能运行”</h2><p><code>parity</code> 在这里表示 candidate（待测实现）与 reference（可信参考实现）在相同条件下数值对齐。脚本没有报异常，只能说明语法和某条执行路径可运行，不能证明公式写对。</p>
+<div class="flow" role="img" aria-label="Reference parity 验证流程图"><div class="node">同一输入</div><div class="arrow">↗<br>↘</div><div class="node">candidate<br>reference</div><div class="arrow">→</div><div class="node">比较 shape</div><div class="arrow">→</div><div class="node">逐元素误差</div><div class="arrow">→</div><div class="node">容差判定</div></div>
+<ol><li><strong>相同输入：</strong>candidate 与 reference 接收同一个 x。</li><li><strong>相同配置：</strong>RMSNorm 使用相同 eps；两个实现复制相同 weight。</li><li><strong>先比结构：</strong>shape、dtype、device 必须符合契约。</li><li><strong>再比数值：</strong>计算逐元素绝对误差和最大绝对误差。</li><li><strong>最后测 backward：</strong>所有预期 Parameter 的 grad 都存在且为有限值。</li></ol>
+<pre>difference = (reference - candidate).abs()
+max_error = difference.max().item()
+torch.testing.assert_close(reference, candidate,
+                           rtol=1e-5, atol=1e-6)</pre>
+<p>你在 0003 已经使用过容差。这里复用同一规则：对每个 reference 元素，允许误差大致为 <code>atol + rtol*abs(reference)</code>。<code>atol</code> 是接近 0 时仍允许的绝对误差，<code>rtol</code> 随参考值大小缩放。</p>
+<div class="card warn"><strong>必须复制相同 weight。</strong>两个随机初始化的数学结构即使都正确，输出也通常不同；那是在比较参数，不是在比较实现。</div></section>
+
+<section><h2>9. 怎样把本课代码映射到真实 Qwen</h2><p>模型源码常把 FFN 类命名为 <code>MLP</code>（multi-layer perceptron，多层感知机）。在 Qwen3 的 MLP 中，本课每个对象都有直接对应：</p>
+<table><tr><th>本课</th><th>Qwen3 源码中的角色</th><th>不变的核心含义</th></tr><tr><td><code>TinyRMSNorm.weight</code></td><td>RMSNorm weight</td><td>沿最后 H 轴归一化后逐特征缩放</td></tr><tr><td><code>gate_proj</code></td><td><code>self.gate_proj</code></td><td>H→I 的 gate 路径</td></tr><tr><td><code>F.silu</code></td><td>配置选择的 <code>act_fn</code></td><td>Qwen 常用 SiLU/SwiGLU 门控激活</td></tr><tr><td><code>up_proj</code></td><td><code>self.up_proj</code></td><td>H→I 的内容路径</td></tr><tr><td><code>down_proj</code></td><td><code>self.down_proj</code></td><td>I→H 返回 decoder 主路径</td></tr></table>
+<pre># 本课与 Qwen3 MLP 的共同核心
+down_proj( act_fn(gate_proj(x)) * up_proj(x) )</pre>
+<p>真实模型的 H、I、层数和 dtype 更大，还会遇到 quantization（量化，用更低位数表示 weight/activation）、fused kernel（融合算子，把多步计算合成一次底层执行）和 export graph（提前导出的计算图）；但这些工程变化不能改变本节的 shape 和元素关系。以后若移动端输出不一致，可按本课边界逐段定位：</p><ol><li>RMSNorm 输出是否对齐；</li><li>gate_proj/up_proj 是否各自对齐；</li><li>SiLU 与逐元素乘法是否对齐；</li><li>down_proj 是否对齐。</li></ol>
+<p>这就是本课与最终 On-device LLM Systems 目标的连接：先建立可解释的最小 reference，之后才能判断错误来自模型公式、export lowering（把高层图算子转换成目标 runtime 支持的低层算子）、量化，还是 runtime kernel（在设备上真正执行算子的底层实现）。</p></section>
+<section><h2>10. 引导练习、独立作业、闭卷与提交</h2><table><tr><th>阶段</th><th>你要做什么</th><th>完成证据</th></tr><tr><td>1. 引导练习</td><td>运行 <code>python exercises/0005_explore_rmsnorm_gated_ffn.py</code>，把输出逐项对应到第 2～9 章。</td><td>能指出 mean_square、gate_raw、gate、up、mixed、output 的数字 shape 和至少一个具体值。</td></tr><tr><td>2. 独立作业</td><td>完成 <code>exercises/0005_rmsnorm_gated_ffn.py</code> 的 4 个 TODO，不复制探索脚本整段答案。</td><td>出现 <code>Lesson 0005: all checks passed.</code>，且 parity error 在测试容差内。</td></tr><tr><td>3. 速查压缩</td><td>查看 <a href="../reference/0005-rmsnorm-gated-ffn-cheatsheet.html">RMSNorm/Gated FFN 速查表</a>，确认公式与 shape 后关闭资料。</td><td>闭卷时不再打开正文、脚本或速查表。</td></tr><tr><td>4. 闭卷迁移</td><td>完成 <a href="../assessments/0005-rmsnorm-gated-ffn.md">0005 过关测试</a>，题目使用不同数字与 shape。</td><td>独立作业、第 1 题、第 3 题通过且总分至少 80。</td></tr><tr><td>5. 提交反馈</td><td>填写 <code>submissions/0005.md</code> 或直接把脚本输出和答案发给我。</td><td>我会逐题给出证据、分数和通过/针对性补强裁决。</td></tr></table><div class="card">如果某个符号、API 或图仍然看不懂，请直接指出具体段落。课程解释不足先修课程，不算你的失败。</div></section>
+<section><h2>11. 指定资料：正文足够完成，外链用于核实</h2><ul><li><strong>主资料：</strong><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html">PyTorch RMSNorm</a>。只看公式、Parameters、Shape 三部分，核对 normalized_shape、eps 和 weight。</li><li><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.SiLU.html">PyTorch SiLU</a>。只核对 <code>silu(x)=x*sigmoid(x)</code> 与输入输出 shape 不变。</li><li><a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Hugging Face Qwen3 implementation</a>。搜索 MLP 类，核对 gate_proj、up_proj、down_proj 和 forward 公式；不要从头阅读整份文件。</li><li><a href="https://arxiv.org/abs/2002.05202">GLU Variants Improve Transformer</a>。只把摘要与公式作为 gated FFN 效果结论的来源，不要求阅读训练实验。</li></ul><p>正文已经解释完成作业所需的全部符号和步骤；外部资料不是前置教材。修订后预计用时 120～150 分钟。</p></section>
 <nav><a href="0004-module-autograd-optimizer.html">← 上一课 0004</a></nav>
 </body></html>
