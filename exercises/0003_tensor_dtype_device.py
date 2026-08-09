@@ -19,7 +19,7 @@ def tensor_data_bytes(tensor: torch.Tensor) -> int:
     Do not use a hard-coded dtype table.
     """
     # TODO 1: use Tensor methods to calculate the result.
-    raise NotImplementedError
+    return tensor.numel() * tensor.element_size()
 
 
 def prepare_linear_inputs(
@@ -34,7 +34,7 @@ def prepare_linear_inputs(
     Do not modify the original tensors in place.
     """
     # TODO 2: convert all three tensors explicitly and return them.
-    raise NotImplementedError
+    return (x.to(device = device, dtype=dtype), weight.to(device = device, dtype=dtype), bias.to(device = device, dtype=dtype))
 
 
 def max_abs_error(reference: torch.Tensor, candidate: torch.Tensor) -> float:
@@ -42,8 +42,10 @@ def max_abs_error(reference: torch.Tensor, candidate: torch.Tensor) -> float:
 
     Both inputs must already have the same shape, dtype, and device.
     """
+    if reference.shape != candidate.shape or reference.dtype != candidate.dtype or reference.device != candidate.device:
+        raise ValueError("invalid input!")
     # TODO 3: calculate the elementwise absolute difference and its maximum.
-    raise NotImplementedError
+    return (reference - candidate).abs().max().item()
 
 
 def run_linear(

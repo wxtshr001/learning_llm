@@ -4,15 +4,13 @@
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0003",
-    "title": "PyTorch Tensor dtype, device, and numerical alignment",
+    "lesson_id": "0003R",
+    "title": "complete device/dtype execution path and decimal error",
     "status": "in_progress",
-    "lesson": "lessons/0003-tensor-dtype-device.html",
-    "guided_exercise": "exercises/0003_explore_dtype_device.py",
-    "exercise": "exercises/0003_tensor_dtype_device.py",
-    "assessment": "assessments/0003-tensor-dtype-device.md",
-    "submission": "submissions/0003.md",
-    "reference": "reference/0003-dtype-device-cheatsheet.html"
+    "lesson": "lessons/0003R-device-path-and-error.html",
+    "guided_exercise": "exercises/0003R_trace_device_path.py",
+    "assessment": "assessments/0003R-device-path-and-error.md",
+    "submission": "submissions/0003R.md"
   },
   "completed_lessons": ["0001", "0002"],
   "completed_remediation": ["0001R", "0001R2", "0002R"],
@@ -20,12 +18,13 @@
   "next_course_generated": false,
   "gate": {
     "minimum_score": 80,
-    "score": null,
-    "result": "awaiting_submission",
-    "critical_items": ["code", "question_1", "question_2", "question_3"]
+    "score": 75,
+    "result": "targeted_remediation",
+    "critical_items": ["question_1", "question_2"]
   },
   "last_verified_evidence": [
     "submissions/0002R-feedback.md",
-    "learning-records/0005-head-index-and-qkv-layout-proven.md"
+    "learning-records/0006-dtype-device-partial-remediation-required.md",
+    "submissions/0003-feedback.md"
   ]
 }

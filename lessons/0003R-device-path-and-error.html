@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0003R：完整 device 路径与误差小数位</title>
+  <style>body{max-width:900px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:23px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d7ddd8;padding:.6em;text-align:left}</style>
+</head>
+<body>
+<h1>0003R：把“迁移 X”补成完整执行路径</h1>
+<p>你的代码已经正确，本补强不重讲 dtype/device。只把闭卷答案中的三个局部缺口变成稳定表达：一次算子的全部输入必须进入相同执行环境；比较前统一格式；误差按位对齐小数。下文中 X 是输入，W 是 weight（权重），b 是 bias（偏置），Y 是 Linear 输出。</p>
+
+<section><h2>1. 已有能力与本节成果</h2><p>可以直接使用：你会 `.to()`、字节计算、Linear 和最大绝对误差。</p><p>本节结束时，你要能仅看一张执行路径表，完整写出 X、W、b、Y 和 candidate 的 device/dtype，并正确计算三个小数误差。</p></section>
+
+<section><h2>2. 算子看的是全部输入</h2><p>Linear <code>Y = X @ W + b</code> 有三个参与计算的输入：X、W、b。选择 CUDA/float16，不是只搬 X，而是为这次计算建立统一条件：</p>
+<table><tr><th>Tensor</th><th>进入计算前</th><th>进入计算后</th></tr><tr><td>X</td><td>CPU/float32</td><td>CUDA/float16</td></tr><tr><td>W</td><td>CPU/float32</td><td>CUDA/float16</td></tr><tr><td>b</td><td>CPU/float32</td><td>CUDA/float16</td></tr><tr><td>Y</td><td>尚不存在</td><td>由 CUDA/float16 运算产生</td></tr></table>
+<pre>x_compute = X.to(device="cuda:0", dtype=torch.float16)
+w_compute = W.to(device="cuda:0", dtype=torch.float16)
+b_compute = b.to(device="cuda:0", dtype=torch.float16)
+y_compute = x_compute @ w_compute + b_compute</pre>
+<div class="card">检查一句 device 路径时，按算子参数表逐个枚举输入，而不是只写最显眼的 X。</div></section>
+
+<section><h2>3. 执行格式与比较格式是两层</h2><p><code>y_compute</code> 是 CUDA/float16。CPU/float32 的 <code>reference</code> 不能直接与它做普通逐元素相减，所以先建立共同的比较格式：</p>
+<pre>candidate = y_compute.to(device="cpu", dtype=torch.float32)
+error = (reference - candidate).abs()</pre>
+<p>这里的 float32 是<strong>比较容器</strong>。它让双方 device/dtype 一致，但不会恢复 float16 运算已经舍入掉的信息。</p>
+<div class="card warn">执行 dtype 回答“计算时用什么格式”；比较 dtype 回答“用什么共同格式度量误差”。不要把两者混成一个步骤。</div></section>
+
+<section><h2>4. 误差先写减法，再取绝对值</h2>
+<pre>reference = -3.0000
+candidate = -2.9990
+
+reference - candidate
+= -3.0000 - (-2.9990)
+= -0.0010
+
+abs(-0.0010) = 0.0010</pre>
+<p>建议把所有数补齐到相同小数位再算。<code>0.0010</code> 与 <code>0.001</code> 数值相同；<code>0.0001</code> 则小了十倍。</p></section>
+
+<section><h2>5. token id 为什么是整数</h2><p>token id 是 vocabulary（词表）中的离散下标。例如 id 137 表示取词表/embedding 表的第 137 项。它要求精确整数语义，就像 C++ 数组下标；是否有小数和 float16 的最大范围都不是核心。activation 是近似数值计算结果，可以接受受控浮点误差；索引 137 不能“近似等于”137。</p></section>
+
+<section><h2>6. 完成方式</h2><ol><li>运行 <code>python exercises/0003R_trace_device_path.py</code>。</li><li>不再修改 0003 主作业。</li><li>关闭本页，完成 <a href="../assessments/0003R-device-path-and-error.md">0003R 闭卷复测</a>。</li></ol><p>官方核实资料：<a href="https://docs.pytorch.org/docs/stable/generated/torch.Tensor.to.html">PyTorch Tensor.to</a>。正文已足够完成复测，链接只用于核实转换行为。预计用时 20～30 分钟。</p></section>
+
+<p><a href="0003-tensor-dtype-device.html">返回 0003 主课</a></p>
+</body></html>
