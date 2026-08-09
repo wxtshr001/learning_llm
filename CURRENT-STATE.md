@@ -4,9 +4,9 @@
 
 ## 当前门禁
 
-**第 0002 课已正式通过；当前暂停，不生成新课程。**
+**第 0003 课进行中，等待学习者提交。**
 
-0002R 最终成绩 95/100。学习者将 rank 检查顺序认定为非概念性疏忽；结合已通过的关键概念题和运行证据，该问题不再阻塞门禁。
+学习者已明确要求继续。第 0003 课聚焦 PyTorch Tensor 的 dtype、device、数据字节数和 CPU/CUDA 数值对齐，不提前进入 autograd。
 
 ## 已完成
 
@@ -24,16 +24,22 @@
 
 ## 学习者下一步
 
-当前无需提交。等待学习者明确要求开始下一课。
+1. 学习 `lessons/0003-tensor-dtype-device.html`。
+2. 运行 `exercises/0003_explore_dtype_device.py`。
+3. 完成 `exercises/0003_tensor_dtype_device.py` 中的三个 TODO，并运行测试。
+4. 闭卷完成 `assessments/0003-tensor-dtype-device.md`。
+5. 将输出和答案写入 `submissions/0003.md` 或直接提交给当前 Agent。
 
 ## Agent 下一步
 
-- 不自动生成第 0003 课。
-- 学习者明确要求继续时，再依据已保存证据生成下一课。
+- 收到答卷前不生成第 0004 课。
+- 收到后按 `COURSE-PROTOCOL.md` 检查代码、属性、dtype 精度、device 路径、容差和 LLM 迁移。
+- 关键题 1、2、3 与代码均通过且总分至少 80 才进入第 0004 课。
 
 ## 最近证据
 
 - `submissions/0002R-feedback.md`
 - `learning-records/0005-head-index-and-qkv-layout-proven.md`
+- `lessons/0003-tensor-dtype-device.html`
 
 环境配置见 `ENVIRONMENT.md`。硬件信息只代表记录时主机，另一平台必须运行 `exercises/0000_verify_pytorch.py` 自行验证。

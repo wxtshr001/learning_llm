@@ -6,6 +6,10 @@
   官方入门系列。使用范围：Tensors、Build Model、Autograd、Optimization；跳过 Datasets、DataLoaders、Transforms 和完整 FashionMNIST 项目。
 - [PyTorch Tensors](https://docs.pytorch.org/tutorials/beginner/basics/tensorqs_tutorial.html)
   用于补齐 shape、indexing、reshape、transpose、dtype、device 和广播；阶段 1 的主资料。
+- [PyTorch Tensor Attributes](https://docs.pytorch.org/docs/stable/tensor_attributes.html)
+  `torch.dtype`、`torch.device` 与 `torch.layout` 的官方定义；第 0003 课只使用 dtype/device 部分。
+- [PyTorch Numerical Accuracy](https://docs.pytorch.org/docs/stable/notes/numerical_accuracy.html)
+  用于理解浮点精度、跨设备差异和容差比较；不把逐 bit 相同当作数值对齐标准。
 - [PyTorch Build the Neural Network](https://docs.pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html)
   用于 `nn.Module`、子模块、参数与 `forward`；只读与最小 decoder 相关部分。
 - [PyTorch Autograd](https://docs.pytorch.org/tutorials/beginner/basics/autogradqs_tutorial.html)

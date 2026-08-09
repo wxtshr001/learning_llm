@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0003 速查：dtype 与 device</title>
+  <style>body{max-width:900px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:16px/1.65 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:20px 0}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d7ddd8;padding:.6em;text-align:left}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:16px;overflow:auto;border-radius:8px}.card{border-left:5px solid #176b70;background:#edf7f4;padding:14px}</style>
+</head>
+<body>
+<h1>PyTorch dtype/device 速查</h1>
+<section><h2>Tensor 核心属性</h2><table><tr><th>表达式</th><th>问题</th></tr><tr><td><code>x.shape</code></td><td>各 axis 有多长？</td></tr><tr><td><code>x.dtype</code></td><td>每个元素怎样表示？</td></tr><tr><td><code>x.device</code></td><td>storage 在哪里？</td></tr><tr><td><code>x.numel()</code></td><td>共有几个元素？</td></tr><tr><td><code>x.element_size()</code></td><td>单元素占几字节？</td></tr></table></section>
+<section><h2>常见 dtype</h2><table><tr><th>dtype</th><th>字节/元素</th><th>典型用途</th></tr><tr><td><code>float32</code></td><td>4</td><td>参考浮点计算</td></tr><tr><td><code>float16</code></td><td>2</td><td>降低推理存储与带宽</td></tr><tr><td><code>bfloat16</code></td><td>2</td><td>另一种 16 位浮点格式</td></tr><tr><td><code>int64</code></td><td>8</td><td>整数索引、常见 token id</td></tr></table><pre>数据字节数 = x.numel() * x.element_size()</pre></section>
+<section><h2>创建与转换</h2><pre>x = torch.tensor(data, dtype=torch.float32, device="cpu")
+target = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+y = x.to(device=target, dtype=torch.float16)
+back = y.to(device="cpu", dtype=torch.float32)</pre><p><code>.to()</code> 需要转换时通常复制；已经满足要求时可以返回原 Tensor。</p></section>
+<section><h2>计算前检查</h2><ul><li>参与同一普通运算的 Tensor 是否在兼容 device？</li><li>dtype 是否是目标 kernel 支持的类型？</li><li>跨设备拷贝是否放在循环或逐算子热路径中？</li><li>比较结果时是否先统一 device 与 dtype？</li></ul></section>
+<section><h2>误差</h2><pre>max_error = (reference - candidate).abs().max().item()
+torch.testing.assert_close(reference, candidate, rtol=..., atol=...)</pre><div class="card">shape 相同不代表 dtype/device 相同；数学等价也不保证 CPU/GPU 或不同 dtype 的结果逐 bit 相同。</div></section>
+<p><a href="../lessons/0003-tensor-dtype-device.html">返回第 0003 课</a></p>
+</body></html>

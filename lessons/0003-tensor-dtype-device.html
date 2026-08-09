@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0003：PyTorch Tensor、dtype 与 device</title>
+  <style>
+    :root{--ink:#17232a;--muted:#53636a;--paper:#fbfaf6;--line:#d7ddd8;--teal:#176b70;--soft:#edf7f4;--orange:#c86d31;--warm:#fff4e9}
+    body{max-width:940px;margin:auto;padding:32px;color:var(--ink);background:var(--paper);font:17px/1.75 Georgia,"Noto Serif SC",serif}
+    h1,h2,h3{line-height:1.25}h1{font-size:2.3rem}section{border-top:1px solid var(--line);padding:25px 0}
+    code{background:#eaf2ef;padding:.1em .35em;border-radius:3px}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px;line-height:1.55}
+    table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.65em;text-align:left;vertical-align:top}
+    .card{border-left:5px solid var(--teal);background:var(--soft);padding:16px;margin:18px 0}.warn{border-left-color:var(--orange);background:var(--warm)}
+    .muted{color:var(--muted)}a{color:var(--teal)}
+  </style>
+</head>
+<body>
+<h1>0003：同一个 Tensor，放在哪里、用什么数表示</h1>
+<p>你已经会追踪 shape 和 Linear 元素计算。本课只给 Tensor 再加两个属性：<code>dtype</code> 决定每个元素用什么数值格式保存，<code>device</code> 决定这些元素存放并计算在哪里。完成后，你能把同一个 Linear 显式放到 CPU 或 CUDA 上运行，并判断结果差异是否合理。</p>
+
+<section>
+  <h2>1. 进入条件与本节成果</h2>
+  <p><strong>可以直接使用：</strong>你已经会读二维 shape、计算元素数量，也会计算 <code>Y = X @ W + b</code>。这里 <code>X</code> 是输入，<code>W</code> 是权重，<code>b</code> 是 bias（偏置），<code>Y</code> 是输出，<code>@</code> 表示矩阵乘法。</p>
+  <p><strong>必须从零解释：</strong><code>dtype</code>、<code>device</code>、<code>element_size()</code>、<code>.to()</code>、浮点误差以及容差比较。</p>
+  <p><strong>本节成果：</strong>运行一个 <code>[B=2,H=3]</code> 的输入，其中 <code>B</code> 是 Batch size（一次处理的样本数），<code>H</code> 是 Hidden size（每个样本的特征数）；在 CPU 与可用加速设备上执行同一 Linear，并报告 dtype、device、内存字节数和最大绝对误差。</p>
+</section>
+
+<section>
+  <h2>2. 一个 Tensor 不只有 shape</h2>
+  <p>观察下面的 Tensor：</p>
+  <pre>x = torch.tensor([[0.1, 0.2, 0.3],
+                  [0.4, 0.5, 0.6]],
+                 dtype=torch.float32,
+                 device="cpu")</pre>
+  <table>
+    <tr><th>属性</th><th>本例</th><th>含义</th></tr>
+    <tr><td><code>shape</code></td><td><code>[2,3]</code></td><td>rank 是 2；axis 0 长度为 2，表示 B；axis 1 长度为 3，表示 H。</td></tr>
+    <tr><td><code>dtype</code></td><td><code>torch.float32</code></td><td>data type，数据类型；每个元素用 32 位浮点格式表示。</td></tr>
+    <tr><td><code>device</code></td><td><code>cpu</code></td><td>Tensor 的 storage（底层保存元素的内存区域）分配在 CPU 可访问的内存中，相关运算由 CPU 路径执行。</td></tr>
+    <tr><td><code>numel()</code></td><td><code>6</code></td><td>number of elements，元素总数；这里是 <code>2*3</code>。</td></tr>
+    <tr><td><code>element_size()</code></td><td><code>4</code></td><td>每个元素占 4 字节，因为 32 位等于 4 字节。</td></tr>
+  </table>
+  <div class="card"><strong>Tensor 可先理解为：</strong>一段元素 storage，加上解释它的元数据。shape 告诉你怎样索引，dtype 告诉你怎样解释每个元素的位，device 告诉你 storage 在哪个执行空间。</div>
+</section>
+
+<section>
+  <h2>3. dtype：同样的 shape，不同的数值表示</h2>
+  <p><code>dtype</code> 是 data type 的缩写。它不改变 Tensor 有几个轴，也不改变每个轴的长度；它会影响单元素字节数、可表示范围、精度以及哪些 kernel（在特定设备上执行某个算子的底层实现）可以执行。</p>
+  <table>
+    <tr><th>PyTorch dtype</th><th>单元素字节</th><th>本课用途</th></tr>
+    <tr><td><code>torch.float32</code></td><td>4</td><td>本课的参考计算；约 7 位十进制有效数字。</td></tr>
+    <tr><td><code>torch.float16</code></td><td>2</td><td>用一半存储展示推理中的内存—精度取舍。</td></tr>
+    <tr><td><code>torch.bfloat16</code></td><td>2</td><td>同为 16 位但位分配不同；本课只识别名称，不考运算支持。</td></tr>
+    <tr><td><code>torch.int64</code></td><td>8</td><td>整数索引常用类型；以后 token id 通常使用它。</td></tr>
+  </table>
+  <p>Python 输入会影响自动推断：</p>
+  <pre>torch.tensor([1, 2]).dtype       # torch.int64
+torch.tensor([1.0, 2.0]).dtype   # 通常是 torch.float32
+torch.tensor([1, 2], dtype=torch.float16).dtype  # 显式指定</pre>
+  <p>课程代码会显式写 dtype，避免因为输入字面量不同而悄悄改变计算类型。</p>
+  <h3>内存怎样计算</h3>
+  <pre>Tensor 数据字节数 = 元素数量 * 每个元素字节数
+                  = x.numel() * x.element_size()</pre>
+  <p>本例 shape 是 <code>[2,3]</code>，共有 6 个元素：</p>
+  <pre>float32: 6 * 4 = 24 bytes
+float16: 6 * 2 = 12 bytes</pre>
+  <p>这只计算当前 Tensor 元素区域，不包含 Python 对象、allocator 对齐、缓存和运行时等额外开销。</p>
+  <div class="card warn"><strong>C++ 类比的边界：</strong><code>float32</code> 的存储宽度可类比 C++ 的常见 <code>float</code>；<code>float16</code> 只是 16 位浮点格式，不能把它当成 <code>uint16_t</code> 做整数解释。</div>
+</section>
+
+<section>
+  <h2>4. 为什么 float16 会产生误差</h2>
+  <p>浮点数只能表示有限的一组数。把 <code>float32</code> 转成 <code>float16</code> 时，一些值需要舍入；再转回 <code>float32</code> 只会把已经舍入的值放入更宽格式，不能恢复丢失的信息。</p>
+  <pre>x32 = torch.tensor([0.1, 0.2, 1000.3], dtype=torch.float32)
+x16 = x32.to(dtype=torch.float16)
+back = x16.to(dtype=torch.float32)
+error = (x32 - back).abs()</pre>
+  <p>因此比较两个浮点结果时，通常不要求每一位完全相同。我们关心：</p>
+  <pre>逐元素绝对误差 = abs(reference - candidate)
+最大绝对误差   = max(abs(reference - candidate))</pre>
+  <p><code>reference</code> 表示参考结果，<code>candidate</code> 表示待检查结果。PyTorch 还提供 <code>torch.testing.assert_close(reference, candidate, rtol=..., atol=...)</code>；<code>rtol</code> 是 relative tolerance（相对容差），<code>atol</code> 是 absolute tolerance（绝对容差）。本课不要求背比较公式，但必须知道容差要由 dtype 和任务精度要求决定，不能看到非零差异就判错。</p>
+</section>
+
+<section>
+  <h2>5. device：storage 在哪个执行空间</h2>
+  <p><code>device</code> 表示 Tensor 分配在哪类设备上。常见值是 <code>cpu</code> 和 <code>cuda:0</code>；<code>cuda</code> 是 NVIDIA GPU 计算平台，末尾的 0 是设备编号。</p>
+  <pre>cpu = torch.device("cpu")
+target = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+x_target = x.to(device=target)</pre>
+  <p><code>.to()</code> 返回满足目标 dtype/device 的 Tensor。需要转换时通常会分配或复制；如果原 Tensor 已满足要求，PyTorch 可以直接返回原对象。因此不要把 <code>.to()</code> 简化成“必然复制”。</p>
+  <p>普通非标量 Tensor 不会在 CPU 和 GPU 间自动迁移。做一次 Linear 时，<code>X</code>、<code>W</code> 和 <code>b</code> 必须进入兼容的 device；否则会得到 device mismatch 错误。</p>
+  <div class="card"><strong>C++/系统类比：</strong>CPU 内存和 CUDA 显存像不同地址空间，kernel 不能随意拿另一空间的普通地址直接计算。类比不完全等价，因为 PyTorch 的 allocator、统一虚拟寻址和特定标量规则会增加细节；本课只使用“跨设备必须显式管理”这一层。</div>
+  <div class="card warn">在真实模型中，不要每个算子前后来回执行 CPU↔GPU 拷贝。频繁传输和同步可能抵消 GPU 计算收益。本课为了观察边界，才把结果统一搬回 CPU 比较。</div>
+</section>
+
+<section>
+  <h2>6. 把已掌握的 Linear 放到目标 device</h2>
+  <p>仍然计算 <code>Y = X @ W + b</code>。这里 <code>X.shape=[B,Hin]</code>，<code>W.shape=[Hin,Hout]</code>，<code>b.shape=[Hout]</code>；<code>Hin</code> 是输入特征数，<code>Hout</code> 是输出特征数。</p>
+  <pre>def run_linear(x, w, b, device, dtype):
+    x_compute = x.to(device=device, dtype=dtype)
+    w_compute = w.to(device=device, dtype=dtype)
+    b_compute = b.to(device=device, dtype=dtype)
+    y_compute = x_compute @ w_compute + b_compute
+    return y_compute.to(device="cpu", dtype=torch.float32)</pre>
+  <p>执行路径是：</p>
+  <pre>CPU 原始输入
+  -> 三个输入迁移到相同 device 和 dtype
+  -> 在目标 device 上执行 matmul 与 bias add
+  -> 结果回到 CPU/float32
+  -> 与 CPU/float32 reference 比较</pre>
+  <p>最后一步转回 float32只是为了统一比较格式，并不会恢复 float16 计算中已经丢失的精度。</p>
+</section>
+
+<section>
+  <h2>7. 这和端侧 LLM 有什么关系</h2>
+  <ul>
+    <li>模型权重和 activation（中间激活值）的 dtype 会直接影响存储、内存带宽和数值误差。</li>
+    <li>token id（词元编号）是离散整数索引，通常不是 float16；它与权重、激活使用不同 dtype。</li>
+    <li>选择 CPU、GPU 或其他 backend（后端执行实现），本质上不仅是改一个字符串；对应 device 必须有可用 kernel，数据搬运也有成本。</li>
+    <li>以后做 PyTorch、LiteRT 与 Android 输出对齐时，应报告 dtype、device/backend 和误差阈值，不能只写“结果不一样”。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>8. 现在怎么学</h2>
+  <ol>
+    <li>运行完整探索脚本：<code>python exercises/0003_explore_dtype_device.py</code>。</li>
+    <li>逐段对照输出与本页，确认你能解释 shape、dtype、device、字节数和误差。</li>
+    <li>完成独立作业 <code>exercises/0003_tensor_dtype_device.py</code> 中的 TODO，并运行全部测试。</li>
+    <li>查看 <a href="../reference/0003-dtype-device-cheatsheet.html">dtype/device 速查表</a>，然后关闭课程和代码。</li>
+    <li>闭卷完成 <a href="../assessments/0003-tensor-dtype-device.md">0003 过关测试</a>。</li>
+  </ol>
+  <p>如果任何字母、输出或 API 仍不清楚，先直接问我，不需要猜着完成作业。</p>
+</section>
+
+<section>
+  <h2>9. 官方核实资料</h2>
+  <p>正文已经足够完成本课。下面只作为 API 行为与数值边界的官方依据：</p>
+  <ul>
+    <li><a href="https://docs.pytorch.org/tutorials/beginner/basics/tensorqs_tutorial.html">PyTorch Tensors</a>：只看 Attributes of a Tensor 与 device 迁移部分。</li>
+    <li><a href="https://docs.pytorch.org/docs/stable/tensor_attributes.html">Tensor Attributes</a>：核实 dtype、device 的定义。</li>
+    <li><a href="https://docs.pytorch.org/docs/stable/generated/torch.Tensor.to.html">Tensor.to</a>：核实 dtype/device 转换的返回行为。</li>
+    <li><a href="https://docs.pytorch.org/docs/stable/notes/numerical_accuracy.html">Numerical Accuracy</a>：核实浮点与跨设备结果不保证逐 bit 相同。</li>
+  </ul>
+  <p class="muted">预计用时：60～90 分钟。本课不讲 autograd、Module 或 optimizer。</p>
+</section>
+
+<nav><a href="0002R-index-and-qkv-layout.html">← 上一课 0002R</a></nav>
+</body>
+</html>
