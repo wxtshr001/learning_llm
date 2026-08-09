@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0005R：参数 shape 与运行 tensor shape</title><style>body{max-width:900px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:22px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:17px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left}.card{border-left:5px solid #176b70;background:#edf7f4;padding:15px}</style></head><body>
+<h1>0005R：不要把三类 shape 放进同一个抽屉</h1>
+<p>你已经证明 RMSNorm 与 gated FFN 的公式、代码和数值都能工作。本补强只处理一个闭卷缺口：区分归约统计量、可训练参数和运行 tensor 的 shape。</p>
+
+<section><h2>1. 三类对象先分类</h2>
+<p>令输入 <code>x.shape=[B=2,S=3,H=4]</code>。固定一个元素 <code>output[b,s,h]</code>：</p>
+<table><tr><th>对象</th><th>shape</th><th>索引</th><th>作用</th></tr>
+<tr><td><code>mean_square</code></td><td><code>[B,S,1]=[2,3,1]</code></td><td><code>mean_square[b,s,0]</code></td><td>每个 token 一个缩放统计量。</td></tr>
+<tr><td>RMSNorm <code>weight</code></td><td><code>[H]=[4]</code></td><td><code>weight[h]</code></td><td>每个 hidden 特征一个可训练 gamma。</td></tr>
+<tr><td><code>output</code></td><td><code>[B,S,H]=[2,3,4]</code></td><td><code>output[b,s,h]</code></td><td>每个 token、每个特征一个结果。</td></tr></table>
+<pre>output[b,s,h]
+= x[b,s,h]
+  * rsqrt(mean_square[b,s,0] + eps)
+  * weight[h]</pre>
+<p><code>mean_square</code> 的最后一维 1 广播到 H；<code>weight</code> 缺少 B、S 两个前导维度，等价于从右对齐为 <code>[1,1,H]</code>，广播到所有 batch 和 token。前者是每 token 的统计量，后者是跨 token 共享的可训练参数。</p></section>
+
+<section><h2>2. Linear 构造、weight storage 与运行数据流</h2>
+<p>PyTorch 构造写作 <code>nn.Linear(in_features, out_features)</code>，但 weight 按 <code>[out_features,in_features]</code> 存储。记忆方法不是背字母，而是看一个输出怎样计算：</p>
+<pre>output[..., out_index]
+= sum(input[..., in_index] * weight[out_index, in_index])</pre>
+<p>每一行 weight 产生一个输出，所以第一轴必须是输出数，第二轴必须是输入数。</p>
+<p>具体令 <code>H=8,I=20</code>：</p>
+<table><tr><th>层</th><th>构造</th><th>weight storage</th><th>运行 tensor</th></tr>
+<tr><td>gate</td><td><code>Linear(8,20)</code></td><td><code>[20,8]</code></td><td><code>[B,S,8] -> [B,S,20]</code></td></tr>
+<tr><td>up</td><td><code>Linear(8,20)</code></td><td><code>[20,8]</code></td><td><code>[B,S,8] -> [B,S,20]</code></td></tr>
+<tr><td>down</td><td><code>Linear(20,8)</code></td><td><code>[8,20]</code></td><td><code>[B,S,20] -> [B,S,8]</code></td></tr></table>
+<div class="card"><strong>检查法：</strong>weight 的第二维必须能与输入 tensor 的最后一维相乘；weight 的第一维就是输出 tensor 的最后一维。</div></section>
+
+<section><h2>3. 与你已通过的代码交叉验证</h2>
+<pre>self.gate_proj = nn.Linear(hidden_size, intermediate_size)
+# 构造参数: (H,I)
+# weight:    [I,H]
+# tensor:    [B,S,H] -> [B,S,I]</pre>
+<p>你的实现写对了数据流，但闭卷答案把构造参数顺序当成了 weight shape。本补强要求能把三者分别写出，而不是修改已经正确的 FFN 代码。</p></section>
+
+<section><h2>4. 引导练习与复测</h2>
+<ol><li>运行 <code>python exercises/0005R_trace_shapes.py</code>，每一行先说对象类别，再说数字 shape。</li><li>关闭本页，完成 <code>assessments/0005R-parameter-and-runtime-shapes.md</code>。</li></ol>
+<p>指定官方资料：PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Linear.html">Linear</a> 的 Variables/Shape，以及 <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html">RMSNorm</a> 的 Parameters/Shape。正文已足够完成复测。</p></section>
+</body></html>

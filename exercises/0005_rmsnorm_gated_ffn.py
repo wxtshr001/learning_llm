@@ -11,24 +11,33 @@ class TinyRMSNorm(nn.Module):
     def __init__(self, hidden_size: int, eps: float = 1e-6) -> None:
         super().__init__()
         # TODO 1: register a learnable weight of ones with shape [H], and save eps.
-        raise NotImplementedError
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.eps = eps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # TODO 2: compute the mean square over the last axis with keepdim=True,
         # normalize with rsqrt(mean_square + eps), apply weight, preserve shape.
         # Use float32 for the normalization calculation and return input dtype.
-        raise NotImplementedError
+        input_dtype = x.dtype
+        x_float = x.float()
+        mean_square = x_float.pow(2).mean(dim = -1, keepdim = True)
+        normalized = x_float * torch.rsqrt(mean_square + self.eps)
+        scaled = normalized * self.weight.float()
+        return scaled.to(dtype = input_dtype)
 
 
 class GatedFFN(nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int) -> None:
         super().__init__()
         # TODO 3: create bias-free gate_proj/up_proj H->I and down_proj I->H.
-        raise NotImplementedError
+        self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias = False)
+        self.up_proj = nn.Linear(hidden_size, intermediate_size, bias = False)
+        self.down_proj = nn.Linear(intermediate_size, hidden_size, bias = False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # TODO 4: down_proj(silu(gate_proj(x)) * up_proj(x)).
-        raise NotImplementedError
+        gate = F.silu(self.gate_proj(x))
+        return self.down_proj(gate * self.up_proj(x))
 
 
 def _fill_weights(ffn: GatedFFN) -> None:

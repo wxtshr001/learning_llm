@@ -17,14 +17,15 @@
 - 第 0003 课代码已证明会计算 dtype 字节数、迁移 X/W/b 到统一 device/dtype，并在 CUDA 上比较最大绝对误差。
 - 第 0003 课最终 92/100 通过；能解释 dtype 精度损失、显式 device 迁移、内存成本与容差门限。
 - 第 0004 课最终 97/100 通过；能解释 Parameter 注册、训练四步职责、梯度累积、finite difference 与推理模式。
+- 0005 独立实现已证明 RMSNorm/gated FFN 主数据流、parity、梯度和 token-local decoder 关系；RMS 手算与门控数值正确。
 - 对单头 Attention、causal mask、增量解码和 KV Cache 有初步直觉，但尚不能据此跳过 tensor shape 推导。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
 - Python/PyTorch API 的语义、报错边界和调试方法。
-- RMSNorm 的 last-axis reduction、逐特征 weight 广播与 reference parity。
-- gated FFN 的三投影 shape、SiLU 门控和逐元素乘法。
+- RMSNorm `mean_square [B,S,1]`、`weight [H]` 与输出 `[B,S,H]` 的对象分类和广播索引。
+- PyTorch Linear 构造 `(in,out)`、weight storage `[out,in]` 与运行 tensor 数据流的区分。
 - GQA、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
 
 ## 强制教学适配
@@ -40,7 +41,7 @@
 
 ## 当前最近发展区
 
-当前进行第 0005 课：用可手算的小 tensor 建立 RMSNorm 与 gated FFN 的 shape、axis、广播和数值直觉，再实现最小 Module 并与 PyTorch/reference 公式对齐。所有 B/S/H/I、epsilon、gamma 在首次出现时必须解释。
+当前进行 0005R：只补 RMSNorm 统计量/Parameter/输出 shape 分类，以及 PyTorch Linear `[out,in]`。不重复已通过的 RMS 手算、gated 数值、parity、梯度和 decoder 数据流。
 
 ## 更新规则
 
