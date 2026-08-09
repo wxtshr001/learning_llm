@@ -6,18 +6,22 @@
   "current": {
     "lesson_id": "0002R",
     "title": "direct head-index mapping and Q/K/V layout transfer",
-    "status": "awaiting_code_fix",
+    "status": "completed_paused",
     "lesson": "lessons/0002R-index-and-qkv-layout.html",
     "exercise": "exercises/0002R_trace_qkv_layout.py",
     "assessment": "assessments/0002R-index-and-qkv-layout.md",
     "submission": "submissions/0002R.md"
   },
-  "completed_lessons": ["0001"],
-  "completed_remediation": ["0001R", "0001R2"],
+  "completed_lessons": ["0001", "0002"],
+  "completed_remediation": ["0001R", "0001R2", "0002R"],
   "next_normal_lesson": "0003",
+  "next_course_generated": false,
   "gate": {
     "minimum_score": 80,
-    "critical_items": ["code", "question_1", "question_2", "question_3"]
+    "score": 95,
+    "result": "passed",
+    "critical_items": ["code", "question_1", "question_2", "question_3"],
+    "adjudication": "rank-check ordering classified by learner as a non-conceptual attention lapse"
   },
   "last_verified_evidence": [
     "submissions/0002R-feedback.md",

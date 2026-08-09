@@ -13,6 +13,7 @@
 - 已通过 Linear shape、逐元素计算、输出索引 `b[j]` 与 bias broadcasting 的复测。
 - 已能计算 `D=H/N`、检查 reshape 元素总数、解释 Sequence/Head 轴交换，并实现 head split/merge 主路径。
 - 已通过 0002R 三个关键概念题：直接使用 `n*D+d` 映射 hidden 索引、追踪 transpose 后具体数值，并从 Q/K/V projection 宽度推出不同 head layout。
+- 第 0002 课已正式通过；一次 rank 检查顺序问题由学习者明确归类为未留意代码逻辑，不作为概念能力缺口。
 - 对单头 Attention、causal mask、增量解码和 KV Cache 有初步直觉，但尚不能据此跳过 tensor shape 推导。
 
 ## 当前必须从基础解释的内容
@@ -34,7 +35,7 @@
 
 ## 当前最近发展区
 
-0002R 概念复测已经通过，当前最近发展区只剩 Python 输入验证顺序：必须在 shape 解包与取模之前检查 rank 和 `num_heads`。通过后按学习者要求只保存进度，暂不生成第 0003 课。
+第 0002 课已经完成。当前没有进行中的课程；按学习者要求暂停并只保存进度，等待其明确要求继续。
 
 ## 更新规则
 
