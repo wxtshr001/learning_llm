@@ -12,13 +12,12 @@
 - 熟悉连续内存、数组索引、指针、资源管理、并发、性能分析和故障定位。
 - 已通过 Linear shape、逐元素计算、输出索引 `b[j]` 与 bias broadcasting 的复测。
 - 已能计算 `D=H/N`、检查 reshape 元素总数、解释 Sequence/Head 轴交换，并实现 head split/merge 主路径。
+- 已通过 0002R 三个关键概念题：直接使用 `n*D+d` 映射 hidden 索引、追踪 transpose 后具体数值，并从 Q/K/V projection 宽度推出不同 head layout。
 - 对单头 Attention、causal mask、增量解码和 KV Cache 有初步直觉，但尚不能据此跳过 tensor shape 推导。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
-- 从 `[B,N,S,D]` 直接映射回 `[B,S,H]` 的逐元素索引，尤其是 `n*D+d`。
-- Q/K/V projection 输出宽度与各自 head 数、`[B,N,S,D]` layout 的连接。
 - Python/PyTorch API 的语义、报错边界和调试方法。
 - GQA、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
 
@@ -35,7 +34,7 @@
 
 ## 当前最近发展区
 
-当前课程是 0002R：降低抽象层级补强直接元素映射和 Q/K/V layout 迁移，并补代码输入边界。未通过复测前，不进入第 0003 课。
+0002R 概念复测已经通过，当前最近发展区只剩 Python 输入验证顺序：必须在 shape 解包与取模之前检查 rank 和 `num_heads`。通过后按学习者要求只保存进度，暂不生成第 0003 课。
 
 ## 更新规则
 

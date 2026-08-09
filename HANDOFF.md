@@ -9,8 +9,9 @@
 - 初始知识诊断已完成；不要重新诊断或重新制定总路线。
 - 第 0001 课已在两次针对性补强后正式通过，证据见 `learning-records/0002-*`、`learning-records/0003-*` 和 `submissions/0001*-feedback.md`。
 - 第 0002 课首次提交为 66/100；shape 与 split/merge 主路径已有证据，但关键题 3、7 未通过。
-- 当前是 0002R：只补直接元素索引、Q/K/V projection 到 head layout 的迁移，以及两个代码输入边界。
-- 当前等待学习者完成 0002R；不要提前生成第 0003 课。
+- 0002R 书面复测为 95/100，直接索引、具体数值和 Q/K/V layout 三个关键题全部通过。
+- 当前只剩代码 rank 检查顺序：学习者把检查写在 `B,S,H = x.shape` 之后，错误 rank 时主动检查不可达。
+- 等待这一处代码证据；学习者明确要求通过后只保存进度，不生成第 0003 课。
 
 精确文件和下一动作以 `CURRENT-STATE.md` 与 `progress.json` 为准。
 
@@ -30,4 +31,4 @@
 
 ## Resume procedure
 
-遵守 `AGENTS.md`，先拉取 `main`，再读取当前 lesson/exercise/assessment。如果学习者提交 0002R，评分、记录、更新状态并推送；否则指导其完成 `CURRENT-STATE.md` 的下一步。
+遵守 `AGENTS.md`，先拉取 `main`。下一次只复核 rank 与 `num_heads=0` 检查是否在 shape 解包和取模前执行；通过后更新完成状态并推送，不生成新课程。

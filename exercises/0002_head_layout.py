@@ -42,6 +42,8 @@ def split_heads(x: torch.Tensor, num_heads: int) -> torch.Tensor:
     # 6. Reshape [B, S, H] -> [B, S, N, D].
     # 7. Transpose dim 1 and dim 2 -> [B, N, S, D].
     B, S, H = x.shape
+    if len(x.shape) != 3 or num_heads <= 0:
+        raise ValueError("Not valid x/num_heads")
     if H % num_heads != 0:
         raise ValueError("Not a valid")
     D = H // num_heads
