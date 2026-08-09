@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0005：RMSNorm 与 Gated FFN</title><style>:root{--ink:#17232a;--paper:#fbfaf6;--line:#d7ddd8;--teal:#176b70;--soft:#edf7f4;--orange:#c86d31;--warm:#fff4e9}body{max-width:950px;margin:auto;padding:32px;color:var(--ink);background:var(--paper);font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid var(--line);padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.65em;text-align:left;vertical-align:top}.card{border-left:5px solid var(--teal);background:var(--soft);padding:16px;margin:18px 0}.warn{border-left-color:var(--orange);background:var(--warm)}a{color:var(--teal)}</style></head><body>
+<h1>0005：每个 token 先归一化，再经过带门控的特征变换</h1>
+<p>本课实现 decoder 中两个不混合 token 位置的组件：RMSNorm 和 gated FFN。RMSNorm 调整每个 token 向量的整体尺度；gated FFN 用两个并行投影产生“门”和“内容”，逐元素相乘后再投影回 hidden size。</p>
+<section><h2>1. 符号与目标</h2><table><tr><th>符号</th><th>英文</th><th>含义</th></tr><tr><td><code>B</code></td><td>Batch size</td><td>一次处理的序列数量。</td></tr><tr><td><code>S</code></td><td>Sequence length</td><td>每条序列中的 token 数。</td></tr><tr><td><code>H</code></td><td>Hidden size</td><td>每个 token 的输入/输出特征数。</td></tr><tr><td><code>I</code></td><td>Intermediate size</td><td>FFN 内部扩展后的特征数。</td></tr><tr><td><code>ε</code></td><td>epsilon</td><td>防止除零的很小正数，代码名通常是 <code>eps</code>。</td></tr><tr><td><code>γ</code></td><td>gamma</td><td>RMSNorm 的逐特征可训练缩放参数，代码中叫 <code>weight</code>。</td></tr></table><p><strong>输入：</strong><code>x.shape=[B,S,H]</code>。<strong>本节成果：</strong>实现 RMSNorm 和 gated FFN，保持输出 shape 为 <code>[B,S,H]</code>，并与 PyTorch/显式 reference 结果在容差内一致。</p></section>
+<section><h2>2. RMSNorm 先看一个具体向量</h2><p>一个 token 的 hidden 向量为 <code>x=[1,2,-1,-2]</code>，所以 <code>H=4</code>。先暂时令 <code>ε=0</code>、<code>γ=[1,1,1,1]</code>：</p><pre>平方:        [1, 4, 1, 4]
+平方平均:    (1+4+1+4) / 4 = 2.5
+RMS:         sqrt(2.5) ≈ 1.5811
+归一化结果:  x / 1.5811
+             ≈ [0.6325, 1.2649, -0.6325, -1.2649]</pre><p><code>RMS</code> 是 root mean square（均方根）：先平方、求平均、再开平方。一般公式：</p><pre>rms(x) = sqrt(mean(x^2) + ε)
+output = x / rms(x) * γ</pre><p>乘法、除法和平方都对元素执行；<code>mean</code> 只沿最后一个 H 轴求平均。对于 <code>[B,S,H]</code>，每个 <code>[H]</code> token 向量各算自己的 rms，B 和 S 不互相混合。</p><div class="card">RMSNorm 不减去均值；它只用平方均值控制向量尺度。shape 从头到尾保持 <code>[B,S,H]</code>。</div></section>
+<section><h2>3. PyTorch 实现与参数 shape</h2><pre>class TinyRMSNorm(nn.Module):
+    def __init__(self, hidden_size, eps=1e-6):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))  # [H]
+        self.eps = eps
+
+    def forward(self, x):
+        input_dtype = x.dtype
+        variance = x.float().pow(2).mean(dim=-1, keepdim=True)
+        normalized = x.float() * torch.rsqrt(variance + self.eps)
+        return self.weight * normalized.to(input_dtype)</pre><p><code>variance</code> 在这里是平方平均值，shape 为 <code>[B,S,1]</code>；<code>keepdim=True</code> 保留最后一个长度为 1 的轴，使它能按广播规则除到 <code>[B,S,H]</code>。<code>rsqrt(v)</code> 表示 <code>1/sqrt(v)</code>。</p><p>中间转 float32 是常见的数值稳定做法，最后转回输入 dtype。weight 的 shape 是 <code>[H]</code>，会广播到每个 batch、每个 token。</p></section>
+<section><h2>4. Gated FFN 的四步</h2><p><code>FFN</code> 是 feed-forward network（前馈网络）。这里使用 gated FFN（带门控前馈网络）。给定 <code>x.shape=[B,S,H]</code>：</p><pre>gate_raw = gate_proj(x)          # [B,S,H] -> [B,S,I]
+gate     = SiLU(gate_raw)        # [B,S,I]
+up       = up_proj(x)            # [B,S,H] -> [B,S,I]
+mixed    = gate * up             # [B,S,I]，逐元素乘法
+output   = down_proj(mixed)      # [B,S,I] -> [B,S,H]</pre><p><code>SiLU</code> 是 sigmoid linear unit，逐元素计算 <code>SiLU(z)=z*sigmoid(z)</code>；<code>sigmoid</code> 把数值压到 0 与 1 之间。这里 gate 路径决定每个 intermediate 特征通过多少，up 路径提供被门控的内容。</p><div class="card warn"><code>*</code> 是逐元素乘法，不是矩阵乘法。gate 与 up 必须具有相同的 <code>[B,S,I]</code> shape。</div></section>
+<section><h2>5. Linear weight 的 shape 不要写反</h2><p>PyTorch <code>nn.Linear(in_features, out_features, bias=False)</code> 的 weight shape 是 <code>[out_features,in_features]</code>：</p><table><tr><th>层</th><th>逻辑变换</th><th>weight shape</th><th>输出 shape</th></tr><tr><td>gate_proj</td><td>H → I</td><td>[I,H]</td><td>[B,S,I]</td></tr><tr><td>up_proj</td><td>H → I</td><td>[I,H]</td><td>[B,S,I]</td></tr><tr><td>down_proj</td><td>I → H</td><td>[H,I]</td><td>[B,S,H]</td></tr></table><p>这与前面课程使用的数学记号 <code>X @ W</code> 中 W 常写成 <code>[in,out]</code> 不同。PyTorch Linear 内部按其 API 存储为 <code>[out,in]</code>，等价计算会使用 weight 的转置关系。</p></section>
+<section><h2>6. 完整 Module</h2><pre>class GatedFFN(nn.Module):
+    def __init__(self, hidden_size, intermediate_size):
+        super().__init__()
+        self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
+        self.up_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
+        self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
+
+    def forward(self, x):
+        gate = torch.nn.functional.silu(self.gate_proj(x))
+        up = self.up_proj(x)
+        return self.down_proj(gate * up)</pre><p>三个 Linear 都会被父 Module 注册，它们的 weight 都是 Parameter。backward 会沿 down、逐元素乘法、SiLU、gate/up 两条路径计算梯度。</p></section>
+<section><h2>7. 它是否混合 token</h2><p>RMSNorm 沿 H 轴处理每个 token；三个 Linear 也只变换最后一个特征轴。固定 <code>b</code>（batch 下标）和 <code>s</code>（token 下标）后，输出只依赖同一个 <code>x[b,s,:]</code>，不会读取另一个 token 的 <code>x[b,s2,:]</code>。token 之间的混合由 Attention 等组件完成，不是本课 FFN 的职责。</p></section>
+<section><h2>8. parity：不要只看“能运行”</h2><p><code>parity</code> 在本课程中表示参考实现与待测实现数值对齐。RMSNorm 与 <code>nn.RMSNorm</code> 使用相同 weight/eps；gated FFN 与显式 <code>F.linear + F.silu + multiply</code> 使用相同权重：</p><pre>max_error = (reference - candidate).abs().max().item()
+torch.testing.assert_close(reference, candidate, rtol=1e-5, atol=1e-6)</pre><p>还要检查 shape、dtype、device、参数 shape，以及 backward 后所有 Parameter 的 grad 是否存在且为有限数。</p></section>
+<section><h2>9. 与真实 Qwen 的连接</h2><p>Qwen 系列的 MLP 使用同样的结构：</p><pre>down_proj( act_fn(gate_proj(x)) * up_proj(x) )</pre><p>真实模型的 H、I 更大，dtype、kernel 和量化更复杂，但 shape 路径不变。第 0005 课建立的是以后阅读 Qwen MLP、对齐导出结果和定位 backend 数值问题的最小 reference。</p></section>
+<section><h2>10. 完成顺序</h2><ol><li>运行 <code>python exercises/0005_explore_rmsnorm_gated_ffn.py</code>。</li><li>对照每个中间 shape 和 parity error。</li><li>完成 <code>exercises/0005_rmsnorm_gated_ffn.py</code> 的 TODO，并运行测试。</li><li>查看 <a href="../reference/0005-rmsnorm-gated-ffn-cheatsheet.html">RMSNorm/Gated FFN 速查表</a>。</li><li>关闭资料，完成 <a href="../assessments/0005-rmsnorm-gated-ffn.md">0005 过关测试</a>。</li></ol><p>任何符号或 shape 不清楚时先问我。</p></section>
+<section><h2>11. 官方与一手资料</h2><ul><li><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html">PyTorch RMSNorm</a>：公式与 API。</li><li><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.SiLU.html">PyTorch SiLU</a>：激活函数定义。</li><li><a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Hugging Face Qwen3 implementation</a>：RMSNorm 与 MLP reference。</li><li><a href="https://arxiv.org/abs/2002.05202">GLU Variants Improve Transformer</a>：SwiGLU 一手论文。</li></ul><p>预计用时 90～120 分钟。</p></section>
+<nav><a href="0004-module-autograd-optimizer.html">← 上一课 0004</a></nav>
+</body></html>

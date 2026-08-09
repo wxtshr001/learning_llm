@@ -18,11 +18,12 @@ class ScalarAffine(nn.Module):
     def __init__(self, scale: float, bias: float) -> None:
         super().__init__()
         # TODO 1: register scale and bias as scalar float32 nn.Parameter objects.
-        raise NotImplementedError
+        self.scale = nn.Parameter(torch.tensor(scale, dtype=torch.float32))
+        self.bias = nn.Parameter(torch.tensor(bias, dtype=torch.float32))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # TODO 2: return scale * x + bias.
-        raise NotImplementedError
+        return self.scale * x + self.bias
 
 
 def squared_error(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -47,7 +48,19 @@ def training_step(
     #   "updated_scale": ...,
     #   "updated_bias": ...,
     # }
-    raise NotImplementedError
+    ret = dict()
+    optimizer.zero_grad()
+    prediction = model(x)
+    ret["prediction"] = prediction
+    loss = squared_error(prediction, target)
+    ret["loss"] = loss
+    loss.backward()
+    ret["scale_grad"] = model.scale.grad.item()
+    ret["bias_grad"] = model.bias.grad.item()
+    optimizer.step()
+    ret["updated_scale"] = model.scale.item()
+    ret["updated_bias"] = model.bias.item()
+    return ret
 
 
 def finite_difference_scale(
@@ -59,7 +72,14 @@ def finite_difference_scale(
     """Approximate d(loss)/d(scale), restore scale, and return a Python float."""
     # TODO 4: evaluate loss at scale+epsilon and scale-epsilon under
     # torch.no_grad(), restore the original scale, then use central difference.
-    raise NotImplementedError
+    original = model.scale.detach().clone()
+    with torch.no_grad():
+        model.scale.copy_(original + epsilon)
+        loss_plus = squared_error(model(x), target).item()
+        model.scale.copy_(original - epsilon)
+        loss_minus = squared_error(model(x), target).item()
+        model.scale.copy_(original)
+    return (loss_plus - loss_minus) / (2 * epsilon)
 
 
 def run_tests() -> None:

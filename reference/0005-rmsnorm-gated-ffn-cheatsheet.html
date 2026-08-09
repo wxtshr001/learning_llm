@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0005 速查：RMSNorm 与 Gated FFN</title><style>body{max-width:900px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:16px/1.65 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:20px 0}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d7ddd8;padding:.6em;text-align:left}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:16px;overflow:auto;border-radius:8px}.card{border-left:5px solid #176b70;background:#edf7f4;padding:14px}</style></head><body>
+<h1>RMSNorm / Gated FFN 速查</h1>
+<section><h2>符号</h2><table><tr><td>B</td><td>batch size</td></tr><tr><td>S</td><td>sequence length</td></tr><tr><td>H</td><td>hidden size</td></tr><tr><td>I</td><td>intermediate size</td></tr><tr><td>ε</td><td>防除零 epsilon</td></tr><tr><td>γ</td><td>RMSNorm weight，[H]</td></tr></table></section>
+<section><h2>RMSNorm</h2><pre>variance = x.float().pow(2).mean(-1, keepdim=True)  # [B,S,1]
+y = x * rsqrt(variance + eps)                       # [B,S,H]
+out = y * weight                                    # weight [H]</pre><p>沿最后 H 轴；不减均值；shape 不变。</p></section>
+<section><h2>Gated FFN</h2><pre>gate = silu(gate_proj(x))  # [B,S,I]
+up = up_proj(x)            # [B,S,I]
+mixed = gate * up          # [B,S,I]
+out = down_proj(mixed)     # [B,S,H]</pre><table><tr><th>weight</th><th>shape</th></tr><tr><td>gate_proj.weight</td><td>[I,H]</td></tr><tr><td>up_proj.weight</td><td>[I,H]</td></tr><tr><td>down_proj.weight</td><td>[H,I]</td></tr></table></section>
+<section><h2>Parity</h2><pre>assert candidate.shape == reference.shape
+torch.testing.assert_close(reference, candidate, rtol=1e-5, atol=1e-6)
+assert all(p.grad is not None and torch.isfinite(p.grad).all()
+           for p in model.parameters())</pre><div class="card">RMSNorm 和 FFN 都逐 token 处理 H 轴，不混合 S 轴。</div></section>
+<p><a href="../lessons/0005-rmsnorm-gated-ffn.html">返回第 0005 课</a></p>
+</body></html>

@@ -18,6 +18,14 @@
   用于核实 `zero_grad -> forward/loss -> backward -> step` 的训练步骤与梯度累积行为。
 - [PyTorch Autograd Mechanics](https://docs.pytorch.org/docs/stable/notes/autograd.html)
   用于区分 grad mode、no-grad、inference mode 和 `Module.eval()`；第 0004 课只读局部关闭梯度部分。
+- [PyTorch RMSNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html)
+  第 0005 课的官方 reference；用于核对 last-axis 归一化、逐特征 weight 和输出 shape。
+- [PyTorch SiLU](https://docs.pytorch.org/docs/stable/generated/torch.nn.SiLU.html)
+  第 0005 课用于理解 gated FFN 中的激活函数 `SiLU(x)=x*sigmoid(x)`。
+- [Hugging Face Qwen3 implementation](https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py)
+  用于把最小 gated FFN 映射到真实的 `down_proj(act(gate_proj(x))*up_proj(x))` 实现。
+- [GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202)
+  gated FFN/GLU 变体的原始研究背景；第 0005 课只需理解门控结构，不要求阅读实验细节。
 - [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
   Transformer 原始论文。只精读 3.1、3.2、3.4、3.5；训练实验、翻译指标和大部分附录暂时跳过。
 - [GQA: Training Generalized Multi-Query Transformer Models](https://arxiv.org/abs/2305.13245)

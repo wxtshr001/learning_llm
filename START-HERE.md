@@ -1,25 +1,25 @@
 # 从这里开始
 
-当前课程状态：**第 0001、0002、0003 课已通过；正在进行第 0004 课。**
+当前课程状态：**第 0001～0004 课已通过；正在进行第 0005 课。**
 
-请完成 [第 0004 课：Module、Parameter、Autograd 与 Optimizer](./lessons/0004-module-autograd-optimizer.html)。
+请完成 [第 0005 课：RMSNorm 与 Gated FFN](./lessons/0005-rmsnorm-gated-ffn.html)。
 
 ## 今天要做的事
 
-1. 阅读第 0004 课，用具体数字区分 forward、backward 和 optimizer。
-2. 运行 [0004 探索脚本](./exercises/0004_explore_training_step.py)。
-3. 完成 [0004 独立作业](./exercises/0004_module_autograd_optimizer.py) 中的 TODO。
-4. 查看 [训练步骤速查表](./reference/0004-training-step-cheatsheet.html)，然后关闭资料。
-5. 闭卷完成 [0004 过关测试](./assessments/0004-module-autograd-optimizer.md)。
-6. 把答案直接发给 Codex，或者填写 [0004 提交模板](./submissions/0004.md) 后告诉 Codex 检查。
+1. 阅读第 0005 课，先用具体数字理解 RMS、last axis 和三条 FFN 投影。
+2. 运行 [0005 探索脚本](./exercises/0005_explore_rmsnorm_gated_ffn.py)。
+3. 完成 [0005 独立作业](./exercises/0005_rmsnorm_gated_ffn.py) 中的 TODO。
+4. 查看 [RMSNorm 与 Gated FFN 速查表](./reference/0005-rmsnorm-gated-ffn-cheatsheet.html)，然后关闭资料。
+5. 闭卷完成 [0005 过关测试](./assessments/0005-rmsnorm-gated-ffn.md)。
+6. 把答案直接发给 Codex，或者填写 [0005 提交模板](./submissions/0005.md) 后告诉 Codex 检查。
 
 ## 我会如何判定
 
-- **通过**：代码与关键题 2、3 正确且总分至少 80，进入第 0005 课。
-- **针对性补强**：只补 Parameter 注册、梯度手算或步骤职责中的实际缺口。
+- **通过**：独立作业与关键题 1、3 正确且总分至少 80，进入第 0006 课。
+- **针对性补强**：只补 RMS 计算、last-axis 广播或 gated FFN shape 中的实际缺口。
 - **评分约束**：不增加题面未声明条件，单次算术笔误结合完整证据判断。
 
-第 0004 课预计 90～120 分钟，目标是实现一次可解释、可用 finite difference 验证的最小训练步骤。
+第 0005 课预计 100～130 分钟，目标是实现 RMSNorm 与 gated FFN，并与 PyTorch/reference 公式完成数值对齐。
 
 ## 其他文件是什么
 

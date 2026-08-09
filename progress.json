@@ -4,29 +4,29 @@
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0004",
-    "title": "Module, Parameter, autograd, optimizer, and finite-difference parity",
+    "lesson_id": "0005",
+    "title": "RMSNorm and gated FFN shape, broadcasting, and parity",
     "status": "in_progress",
-    "lesson": "lessons/0004-module-autograd-optimizer.html",
-    "guided_exercise": "exercises/0004_explore_training_step.py",
-    "exercise": "exercises/0004_module_autograd_optimizer.py",
-    "assessment": "assessments/0004-module-autograd-optimizer.md",
-    "submission": "submissions/0004.md",
-    "reference": "reference/0004-training-step-cheatsheet.html"
+    "lesson": "lessons/0005-rmsnorm-gated-ffn.html",
+    "guided_exercise": "exercises/0005_explore_rmsnorm_gated_ffn.py",
+    "exercise": "exercises/0005_rmsnorm_gated_ffn.py",
+    "assessment": "assessments/0005-rmsnorm-gated-ffn.md",
+    "submission": "submissions/0005.md",
+    "reference": "reference/0005-rmsnorm-gated-ffn-cheatsheet.html"
   },
-  "completed_lessons": ["0001", "0002", "0003"],
+  "completed_lessons": ["0001", "0002", "0003", "0004"],
   "completed_remediation": ["0001R", "0001R2", "0002R"],
-  "next_normal_lesson": "0005",
-  "next_course_generated": false,
+  "next_normal_lesson": "0006",
+  "next_course_generated": true,
   "gate": {
     "minimum_score": 80,
     "score": null,
     "result": "awaiting_submission",
-    "critical_items": ["code", "question_2", "question_3"],
-    "previous_adjudication": "lesson 0003 passed at 92 after removing unstated dtype criteria"
+    "critical_items": ["code", "question_1", "question_3"],
+    "previous_adjudication": "lesson 0004 passed at 97; isolated transcription slips were non-conceptual"
   },
   "last_verified_evidence": [
-    "submissions/0003-feedback.md",
-    "learning-records/0006-tensor-dtype-device-proven.md"
+    "submissions/0004-feedback.md",
+    "learning-records/0007-module-autograd-optimizer-proven.md"
   ]
 }
