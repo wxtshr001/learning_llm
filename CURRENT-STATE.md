@@ -35,6 +35,7 @@
 - 该问题按 `AGENTS.md` 判定为课程设计缺陷，不记为学习者答错或知识缺口。
 - 0006 已改为：整体 Causal LM → decoder layer/residual stream → Q/K/V 来源与分工 → 逐元素 score/scale/mask/softmax/value → PyTorch → full-sequence/prefill/decode 边界。
 - 课程协议和模块 B 地图已加入“未知的未知”反向审查，防止后续课程继续孤立罗列概念。
+- 学习者指出 PyTorch 位于仓库外的用户级 venv 后，已用 PyTorch 2.13.0+cpu 重新验证 0006 reference：精确 weights/output 与因果测试通过；独立 TODO 仍等待学习者完成。
 
 ## 非阻塞工程提醒
 

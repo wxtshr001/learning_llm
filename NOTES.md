@@ -1,5 +1,6 @@
 # Teaching Notes
 
+- 2026-08-11：环境检查不能只调用 PATH 中的系统 Python。学习者指出 PyTorch 位于仓库外的用户级 venv；已用其中的 PyTorch 2.13.0+cpu 验证 0006 reference。`0000_verify_pytorch.py` 改为默认验证实际可用的 CPU/CUDA，并用 `--require-cuda` 表达真正的 GPU 前置条件。
 - 2026-08-11：学习者指出 0006 初版虽声明 Q/K/V、score、scale、mask、softmax axis 与 value 加权“必须从零解释”，正文却直接给公式和极简例子；这是课程设计缺陷，不是学习者失败。已重写为角色直觉、逐元素数字、shape/axis、完整计算链和代码映射。
 - 2026-08-11：学习者进一步指出 Transformer inference 模块不能按课表甩出孤立概念。以后每课必须从最终 Causal LM 数据流反向识别“未知的未知”，明确组件在 residual stream 中的上游/下游、Parameter/activation/state、full-sequence/prefill/decode 差异和正确性不变量。
 
