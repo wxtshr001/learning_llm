@@ -18,14 +18,14 @@
 - 第 0003 课最终 92/100 通过；能解释 dtype 精度损失、显式 device 迁移、内存成本与容差门限。
 - 第 0004 课最终 97/100 通过；能解释 Parameter 注册、训练四步职责、梯度累积、finite difference 与推理模式。
 - 0005 独立实现已证明 RMSNorm/gated FFN 主数据流、parity、梯度和 token-local decoder 关系；RMS 手算与门控数值正确。
+- 第 0005 课已正式通过；能区分 RMSNorm statistic/Parameter/output，以及 Linear 构造、`[out,in]` storage 与运行 tensor。
 - 对单头 Attention、causal mask、增量解码和 KV Cache 有初步直觉，但尚不能据此跳过 tensor shape 推导。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
 - Python/PyTorch API 的语义、报错边界和调试方法。
-- RMSNorm `mean_square [B,S,1]`、`weight [H]` 与输出 `[B,S,H]` 的对象分类和广播索引。
-- PyTorch Linear 构造 `(in,out)`、weight storage `[out,in]` 与运行 tensor 数据流的区分。
+- 单头 attention 的 Q/K/V score、`sqrt(D)` scale、causal mask、softmax key axis 和 value 加权。
 - GQA、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
 
 ## 强制教学适配
@@ -41,7 +41,7 @@
 
 ## 当前最近发展区
 
-当前进行 0005R：只补 RMSNorm 统计量/Parameter/输出 shape 分类，以及 PyTorch Linear `[out,in]`。不重复已通过的 RMS 手算、gated 数值、parity、梯度和 decoder 数据流。
+当前进行第 0006 课：从 D=1 的精确均匀权重开始，掌握单头 causal attention 的手算、shape、mask、softmax axis 与因果行为测试。
 
 ## 更新规则
 

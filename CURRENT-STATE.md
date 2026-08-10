@@ -1,14 +1,14 @@
 # Current Learning State
 
-更新时间：2026-08-10
+更新时间：2026-08-11
 
 ## 当前门禁
 
-**第 0005 课首次提交 82/100，当前进入 0005R。**
+**0005R 90/100，通过；第 0006 课进行中。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
-0005 独立作业与第 1 题通过。第 3 题是关键题，三个 Linear weight shape 均按 `[in,out]` 写反；第 2 题把 RMSNorm `weight [H]` 写成 `mean_square [B,S,1]`。当前只补参数、统计量与运行 tensor 的 shape 分类。
+0005R 已证明能够区分 RMSNorm 统计量/Parameter/输出，以及 Linear 构造/weight storage/运行 tensor。当前进入单头 causal attention。
 
 ## 已完成
 
@@ -22,11 +22,11 @@
 - 第 0003 课最终 92/100：dtype 转换、字节计算、三输入迁移、CUDA Linear、最大绝对误差和容差判断均通过。
 - 第 0004 课 97/100：Parameter 注册、训练四步、梯度累积、finite difference 与推理模式均通过。
 - 0005 已证明部分：RMSNorm 手算、last-axis 实现、gated FFN 数据流、数值 parity、梯度与 decoder residual 关系。
+- 0005R 90/100：参数与运行 tensor shape 门禁通过，第 0005 课正式完成。
 
 ## 当前知识缺口
 
-- 尚未稳定区分 RMSNorm `mean_square [B,S,1]`、`weight [H]` 和输出 `[B,S,H]`。
-- 尚未通过 PyTorch Linear `weight=[out,in]` 的闭卷门禁。
+- 单头 Q/K/V score、scale、causal mask、softmax key axis 与 value 加权尚未验证。
 
 ## 非阻塞工程提醒
 
@@ -36,18 +36,19 @@
 
 ## 学习者下一步
 
-1. 学习 `lessons/0005R-parameter-and-runtime-shapes.html`。
-2. 运行 `exercises/0005R_trace_shapes.py`。
-3. 闭卷完成 `assessments/0005R-parameter-and-runtime-shapes.md`，填写 `submissions/0005R.md`。
+1. 学习 `lessons/0006-single-head-causal-attention.html`。
+2. 运行 `exercises/0006_explore_single_head_attention.py`。
+3. 完成 `exercises/0006_single_head_causal_attention.py` 的 TODO 并运行测试。
+4. 闭卷完成 `assessments/0006-single-head-causal-attention.md`，填写 `submissions/0006.md`。
 
 ## Agent 下一步
 
-- 收到 0005R 前，不生成第 0006 课。
-- 0005R 第 1、2 题均通过且总分至少 80，才结束第 0005 课。
+- 收到 0006 前，不生成第 0007 课。
+- 独立作业、第 1、2、3 题通过且总分至少 80，才进入 MHA/GQA。
 
 ## 最近证据
 
-- `submissions/0005-feedback.md`
-- `learning-records/0008-rmsnorm-gated-ffn-partial.md`
+- `submissions/0005R-feedback.md`
+- `learning-records/0009-rmsnorm-gated-ffn-proven.md`
 
 环境配置见 `ENVIRONMENT.md`。硬件信息只代表记录时主机，另一平台必须运行 `exercises/0000_verify_pytorch.py` 自行验证。

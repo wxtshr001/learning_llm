@@ -1,32 +1,33 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-09",
+  "updated_at": "2026-08-11",
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0005R",
-    "title": "parameter, reduction-statistic, and runtime tensor shapes",
-    "status": "awaiting_submission",
-    "lesson": "lessons/0005R-parameter-and-runtime-shapes.html",
-    "guided_exercise": "exercises/0005R_trace_shapes.py",
-    "exercise": "exercises/0005R_trace_shapes.py",
-    "assessment": "assessments/0005R-parameter-and-runtime-shapes.md",
-    "submission": "submissions/0005R.md"
+    "lesson_id": "0006",
+    "title": "single-head causal attention",
+    "status": "in_progress",
+    "lesson": "lessons/0006-single-head-causal-attention.html",
+    "guided_exercise": "exercises/0006_explore_single_head_attention.py",
+    "exercise": "exercises/0006_single_head_causal_attention.py",
+    "assessment": "assessments/0006-single-head-causal-attention.md",
+    "submission": "submissions/0006.md",
+    "reference": "reference/0006-single-head-attention-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-10: focused remediation for RMSNorm weight broadcasting and PyTorch Linear [out,in] storage",
-  "completed_lessons": ["0001", "0002", "0003", "0004"],
-  "completed_remediation": ["0001R", "0001R2", "0002R"],
-  "next_normal_lesson": "0006",
-  "next_course_generated": false,
+  "current_lesson_revision": "2026-08-11: initial single-head causal attention lesson",
+  "completed_lessons": ["0001", "0002", "0003", "0004", "0005"],
+  "completed_remediation": ["0001R", "0001R2", "0002R", "0005R"],
+  "next_normal_lesson": "0007",
+  "next_course_generated": true,
   "gate": {
     "minimum_score": 80,
     "score": null,
-    "result": "awaiting_remediation_submission",
-    "critical_items": ["guided_code", "question_1", "question_2"],
-    "previous_attempt": "lesson 0005 scored 82; critical question 3 failed because all Linear weight shapes were reversed"
+    "result": "awaiting_submission",
+    "critical_items": ["code", "question_1", "question_2", "question_3"],
+    "previous_adjudication": "lesson 0005R passed at 90; one carried-over dimension and one omitted formula were local deductions"
   },
   "last_verified_evidence": [
-    "submissions/0005-feedback.md",
-    "learning-records/0008-rmsnorm-gated-ffn-partial.md"
+    "submissions/0005R-feedback.md",
+    "learning-records/0009-rmsnorm-gated-ffn-proven.md"
   ]
 }

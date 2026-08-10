@@ -26,3 +26,4 @@
 - 0002R 书面复测 95/100，三个关键概念题全部通过。代码加入了 rank/num_heads 判断，但 rank 判断位于 `B,S,H=x.shape` 之后而不可达；只补检查顺序，不再生成课程或重测概念题。
 - 学习者随后明确指出上述检查顺序只是未注意代码逻辑，不是知识概念错误；最终裁决 0002R 通过。只保存完成进度，不生成第 0003 课。
 - 0005 首次提交 82/100。代码与主要数值链通过，但闭卷时三项 Linear weight shape 全部反转，并把 RMSNorm weight 写成 mean_square shape；重复模式构成 shape 分类缺口，进入短 0005R，不重复其他内容。
+- 0005R 最终 90/100。output shape 单次沿用旧例 H=4、逐元素公式漏写仅局部扣分；跨题 H=6/I=14 的构造、storage、runtime shape 一致，关键门禁通过，进入单头 causal attention。

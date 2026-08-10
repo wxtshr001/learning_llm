@@ -28,6 +28,12 @@
   gated FFN/GLU 变体的原始研究背景；第 0005 课只需理解门控结构，不要求阅读实验细节。
 - [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
   Transformer 原始论文。只精读 3.1、3.2、3.4、3.5；训练实验、翻译指标和大部分附录暂时跳过。
+- [PyTorch matmul](https://docs.pytorch.org/docs/stable/generated/torch.matmul.html)
+  第 0006 课用于核对 batched QK 点积和 attention weight 与 V 的矩阵乘法 shape。
+- [PyTorch softmax](https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.softmax.html)
+  第 0006 课用于核对沿 key axis 归一化，每个 query 的权重和为 1。
+- [PyTorch masked_fill](https://docs.pytorch.org/docs/stable/generated/torch.Tensor.masked_fill.html)
+  第 0006 课用于在 softmax 前把未来 key score 设为负无穷。
 - [GQA: Training Generalized Multi-Query Transformer Models](https://arxiv.org/abs/2305.13245)
   GQA 原始论文。用于理解 query heads 与 KV heads 的折中及 Cache 收益；不学习 uptraining 实验细节。
 - [Hugging Face Transformers: Caching](https://huggingface.co/docs/transformers/main/cache_explanation)

@@ -13,8 +13,8 @@
 - rank 检查位置经学习者裁决为非概念性代码疏忽，不再阻塞门禁；保留为非阻塞工程提醒。
 - 第 0003 课最终裁决 92/100 并正式通过。初次评分错误增加了题面未声明的 dtype 条件，已按学习者异议更正并撤销 0003R。
 - 第 0004 课最终 97/100 并正式通过。
-- 第 0005 课首次提交 82/100：代码、RMS 手算、gated 数值与 decoder 迁移通过；关键题 3 的三个 Linear weight shape 全部反转，第 2 题又混淆 RMSNorm statistic 与 weight shape。
-- 当前是 0005R，只补统计量/Parameter/运行 tensor 分类与 PyTorch Linear `[out,in]`；不要生成第 0006 课。
+- 第 0005 课首次提交 82/100，0005R 最终 90/100；统计量/Parameter/运行 tensor 与 Linear `[out,in]` 门禁通过，第 0005 课正式完成。
+- 当前是第 0006 课：单头 causal attention，等待提交；不要生成第 0007 课。
 
 精确文件和下一动作以 `CURRENT-STATE.md` 与 `progress.json` 为准。
 
@@ -34,4 +34,4 @@
 
 ## Resume procedure
 
-遵守 `AGENTS.md`，先拉取 `main`。收到 0005R 后只检查 mean_square/weight/output 三类 shape、广播索引和 Linear 构造/weight/runtime 三种写法；不要重复已经通过的 0005 内容。
+遵守 `AGENTS.md`，先拉取 `main`。收到 0006 后检查代码、精确手算、Q/K/V shape、softmax key axis 与 causal 行为；关键题或代码未通过不得进入 MHA/GQA。

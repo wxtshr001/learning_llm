@@ -1,0 +1,6 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>0006 单头因果注意力速查</title><style>body{max-width:850px;margin:auto;padding:30px;font:16px/1.65 sans-serif}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef}</style></head><body><h1>单头 Causal Attention 速查</h1><pre>Q,K,V: [B,S,D]
+K^T:   [B,D,S]
+scores = Q @ K^T / sqrt(D)       # [B,S_query,S_key]
+scores = scores.masked_fill(future_mask, -inf)
+weights = softmax(scores, dim=-1) # 沿 key 轴，每行和 1
+output = weights @ V              # [B,S,D]</pre><p><code>score[b,q,k]=sum_d Q[b,q,d]*K[b,k,d]/sqrt(D)</code></p><p><code>output[b,q,d]=sum_k weights[b,q,k]*V[b,k,d]</code></p><p>causal 条件：仅允许 <code>k&lt;=q</code>。未来权重为 0，修改未来 V 不得改变过去 query 的输出。</p><p><a href="../lessons/0006-single-head-causal-attention.html">返回课程</a></p></body></html>
