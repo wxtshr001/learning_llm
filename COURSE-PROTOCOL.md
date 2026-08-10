@@ -30,6 +30,9 @@
 - 课程必须说明本节与最终 LLM Systems 目标的关系，但不能用尚未讲过的 LLM 术语解释当前基础概念。
 - 外部资料只承担出处、核实和扩展作用。即使暂时打不开资料，正文仍应足够完成本课。
 - 交付前必须运行代码测试、相对链接检查和外部 HTTP 检查，并记录新鲜验证结果。
+- 每个模型组件首次出现时必须给出系统坐标：上游输入来自哪里、下游输出交给谁、Parameter/activation/state 各是什么、它是否跨 token 读写，以及它在 full-sequence、prefill、decode 中是否改变 shape 或生命周期。
+- 不能把课程地图中的名词列表当成教程。生成课程前要从 `MISSION.md` 的最终能力反向检查本课所需的隐含前置知识和常见“未知的未知”；必要基础应嵌入当前讲解，尚未到实现门禁的后续概念只建立边界和连接，不提前评分。
+- 每个 Transformer inference 组件都要重新接回 residual stream 与完整生成链：token ids → embedding → decoder layers → final norm → LM Head/logits → next token；避免学习者只会孤立算子。
 
 ## 判定规则
 

@@ -4,7 +4,7 @@
 
 ## 当前门禁
 
-**0005R 90/100，通过；第 0006 课进行中。**
+**0005R 90/100，通过；第 0006 课完成课程设计修订，仍在进行中。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -24,9 +24,17 @@
 - 0005 已证明部分：RMSNorm 手算、last-axis 实现、gated FFN 数据流、数值 parity、梯度与 decoder residual 关系。
 - 0005R 90/100：参数与运行 tensor shape 门禁通过，第 0005 课正式完成。
 
-## 当前知识缺口
+## 当前待验证能力
 
 - 单头 Q/K/V score、scale、causal mask、softmax key axis 与 value 加权尚未验证。
+- 能否把单头 Attention 放回 decoder-only Causal LM 的 residual stream，并区分 Parameter、activation、KV Cache 与 full-sequence/prefill/decode，尚未验证。
+
+## 课程设计修订
+
+- 学习者指出 0006 初版虽然声明“必须从零解释”，正文却直接给结论性例子与公式；同时没有交代 Transformer 整体、组件嵌入位置和数据流。
+- 该问题按 `AGENTS.md` 判定为课程设计缺陷，不记为学习者答错或知识缺口。
+- 0006 已改为：整体 Causal LM → decoder layer/residual stream → Q/K/V 来源与分工 → 逐元素 score/scale/mask/softmax/value → PyTorch → full-sequence/prefill/decode 边界。
+- 课程协议和模块 B 地图已加入“未知的未知”反向审查，防止后续课程继续孤立罗列概念。
 
 ## 非阻塞工程提醒
 
@@ -36,7 +44,7 @@
 
 ## 学习者下一步
 
-1. 学习 `lessons/0006-single-head-causal-attention.html`。
+1. 从头阅读修订后的 `lessons/0006-single-head-causal-attention.html`；旧版阅读不计入门禁。
 2. 运行 `exercises/0006_explore_single_head_attention.py`。
 3. 完成 `exercises/0006_single_head_causal_attention.py` 的 TODO 并运行测试。
 4. 闭卷完成 `assessments/0006-single-head-causal-attention.md`，填写 `submissions/0006.md`。
@@ -44,10 +52,11 @@
 ## Agent 下一步
 
 - 收到 0006 前，不生成第 0007 课。
-- 独立作业、第 1、2、3 题通过且总分至少 80，才进入 MHA/GQA。
+- 独立作业、第 1、2、3、4、6 题通过且总分至少 80，才进入 MHA/GQA；第 4 题验证 Q/K/V 与求和轴，第 6 题验证 Transformer 数据流。
 
 ## 最近证据
 
+- `submissions/0006-feedback.md`
 - `submissions/0005R-feedback.md`
 - `learning-records/0009-rmsnorm-gated-ffn-proven.md`
 

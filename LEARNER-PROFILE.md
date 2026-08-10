@@ -41,7 +41,7 @@
 
 ## 当前最近发展区
 
-当前进行第 0006 课：从 D=1 的精确均匀权重开始，掌握单头 causal attention 的手算、shape、mask、softmax axis 与因果行为测试。
+当前进行第 0006 课：先建立 decoder-only Causal LM、residual stream 与 full-sequence/prefill/decode 的整体坐标，再从具体数字掌握单头 causal attention 的 Q/K/V 分工、手算、shape、mask、softmax key axis、value 加权与因果行为测试。初版课程的系统上下文与从零解释不足已判为课程设计缺陷，不构成学习者失败。
 
 ## 更新规则
 

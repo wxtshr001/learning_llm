@@ -14,7 +14,7 @@
     "submission": "submissions/0006.md",
     "reference": "reference/0006-single-head-attention-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-11: initial single-head causal attention lesson",
+  "current_lesson_revision": "2026-08-11: rewritten from first principles with Transformer system placement, residual data flow, Q/K/V roles, full score-to-value derivation, and full-sequence/prefill/decode boundaries after learner identified a course-design defect",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R"],
   "next_normal_lesson": "0007",
@@ -23,10 +23,11 @@
     "minimum_score": 80,
     "score": null,
     "result": "awaiting_submission",
-    "critical_items": ["code", "question_1", "question_2", "question_3"],
-    "previous_adjudication": "lesson 0005R passed at 90; one carried-over dimension and one omitted formula were local deductions"
+    "critical_items": ["code", "question_1", "question_2", "question_3", "question_4", "question_6"],
+    "previous_adjudication": "lesson 0005R passed at 90; lesson 0006 course-design defect does not count as learner failure and 0006 remains awaiting submission"
   },
   "last_verified_evidence": [
+    "submissions/0006-feedback.md",
     "submissions/0005R-feedback.md",
     "learning-records/0009-rmsnorm-gated-ffn-proven.md"
   ]

@@ -16,14 +16,24 @@
 
 ## 模块 B：Transformer inference
 
-| 课次 | 能力成果 | 门禁证据 |
-|---|---|---|
-| 0006 | 单头 causal attention | 手算 attention 与代码输出一致 |
-| 0007 | MHA 与 GQA | 正确映射 Q heads/KV heads，并计算 Cache 节省 |
-| 0008 | RoPE | 实现旋转并解释 position 对 Q/K 的影响 |
-| 0009 | Tiny Decoder Layer | RMSNorm、Attention、FFN、residual 全部 shape 正确 |
-| 0010 | Prefill、decode 与 KV Cache | full forward 与 incremental logits parity |
-| 0011 | Tiny Causal LM | 完成 embedding、LM Head 和 greedy generation |
+本模块不是六个独立算子练习，而是逐步组装同一条 decoder-only Causal LM 数据流：
+
+```text
+token ids → embedding → repeated decoder layers → final norm → LM Head/logits
+                         ├─ RMSNorm → Attention → residual
+                         └─ RMSNorm → FFN       → residual
+```
+
+每课都必须说明新部件的上游、下游、Parameter/activation/state 边界，以及 full-sequence、prefill、decode 三种执行视角；后续课可复用已证明的基础，但不能省略系统连接。
+
+| 课次 | 新增能力 | 嵌入整体的位置 | 门禁证据 |
+|---|---|---|---|
+| 0006 | 单头 causal attention | hidden states 经 Q/K/V projection 后的跨 token 信息路由内核 | 手算、代码、因果行为与 decoder 数据流解释一致 |
+| 0007 | MHA 与 GQA | 并行多个 attention 子空间，合并后经 output projection 回 residual stream | 正确映射 Q heads/KV heads，并计算 Cache 节省 |
+| 0008 | RoPE | score 前作用于 Q/K，把 position 写入匹配关系，不直接旋转 V | 实现旋转并解释 position 对 Q/K 和 score 的影响 |
+| 0009 | Tiny Decoder Layer | 组装两段 pre-norm 子层及 residual，形成可堆叠 layer | RMSNorm、Attention、FFN、residual 全部 shape 与执行顺序正确 |
+| 0010 | Prefill、decode 与 KV Cache | 把 full-sequence layer 改为请求内有状态的增量执行 | full forward 与 incremental logits parity，能解释 Cache 生命周期 |
+| 0011 | Tiny Causal LM | layer 前加 embedding，layer 后加 final norm/LM Head/生成循环 | 完成从 token ids 到 logits 再到 greedy next token 的闭环 |
 
 只有 0010 通过后才进入 Qwen3.5 state。
 

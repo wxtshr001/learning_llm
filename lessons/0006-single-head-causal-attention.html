@@ -1,70 +1,267 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0006：单头 Causal Attention</title><style>body{max-width:940px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}</style></head><body>
-<h1>0006：一个 token 怎样只读取自己和过去</h1>
-<p>本课实现 single-head causal attention（单头因果注意力）。single-head 表示暂时只有一组 Q、K、V；causal 表示位置 q 只能读取 key 位置 <code>k &lt;= q</code>，不能看到未来。多头和 GQA 留到第 0007 课。</p>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0006：从 Transformer 数据流理解单头 Causal Attention</title>
+  <style>
+    body{max-width:980px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}
+    section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}
+    table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.flow{font-family:monospace;white-space:pre-wrap}.small{font-size:.93em;color:#41535a}
+  </style>
+</head>
+<body>
+<h1>0006：从 Transformer 数据流理解单头 Causal Attention</h1>
+<p>本课不把 Attention 当成孤立公式。先看它在 Transformer decoder（逐 token 生成文本的模型主体）中的位置，再从一个 token 怎样选择并读取过去信息开始，逐步得到 Q、K、V、score、scale、causal mask、softmax 和 value 加权。</p>
 
-<section><h2>1. 进入条件、符号和成果</h2>
-<div class="card"><strong>可以依赖：</strong>你已通过 `[B,S,H]`、transpose、Linear、dtype/device、Module、RMSNorm/FFN 与参数/运行 tensor shape 门禁。<br><strong>必须从零解释：</strong>Q/K/V 在 attention 中的角色、score、scale、causal mask、softmax axis 与 value 加权。</div>
-<table><tr><th>符号</th><th>含义</th></tr><tr><td>B</td><td>Batch size，同时处理的序列数。</td></tr><tr><td>S</td><td>Sequence length，每条序列的 token 数。</td></tr><tr><td>D</td><td>单个 attention head 的特征数。</td></tr><tr><td>q</td><td>query position，当前正在产生输出的 token 位置。</td></tr><tr><td>k</td><td>key position，被当前 query 比较和读取的位置。</td></tr></table>
-<p>Q、K、V 均为 rank 3 tensor，shape <code>[B,S,D]</code>。本课成果是得到 weights <code>[B,S_query,S_key]</code> 和 output <code>[B,S,D]</code>，并证明未来 token 不影响过去输出。</p></section>
+<section><h2>1. 这节课在整个 Transformer inference 模块中的位置</h2>
+<p><strong>Transformer</strong> 是由许多 decoder layer（解码器层）重复堆叠起来的网络。<strong>inference</strong> 是使用训练好的参数执行输入到输出的计算，不在本课更新参数。文本进入模型后的主路径是：</p>
+<pre class="flow">token ids
+   ↓ token embedding：把整数 token id 查表变成 H 维向量
+hidden_states [B,S,H]
+   ↓ 重复经过 L 个 decoder layer
+final hidden_states [B,S,H]
+   ↓ final RMSNorm
+   ↓ LM Head：H 维向量映射为词表 VocabSize 个 logits
+next-token logits [B,S,VocabSize]
+   ↓ 选择下一个 token，再继续生成</pre>
+<p>这里 <code>B</code> 是 batch size（同时处理的序列数），<code>S</code> 是 sequence length（每条序列已有的 token 数），<code>H</code> 是 hidden size（每个 token 在层间主路径上的特征数），<code>L</code> 是 decoder layer 数。</p>
+<p>一个常见的 pre-norm decoder layer 数据流如下。pre-norm 指每个主要子层<strong>之前</strong>先做归一化：</p>
+<pre class="flow">                         ┌──────── residual 1 ────────┐
+hidden_states [B,S,H] ──┼→ RMSNorm → Self-Attention ├→ add → h [B,S,H]
+                         └────────────────────────────┘
+                                                    ┌──── residual 2 ────┐
+                               h [B,S,H] ───────────┼→ RMSNorm → FFN/MLP ├→ add → layer output
+                                                    └────────────────────┘</pre>
+<table><tr><th>组件</th><th>在 layer 中做什么</th><th>是否主动混合 token</th></tr>
+<tr><td>RMSNorm（0005）</td><td>逐 token 调整 H 个特征的尺度，为下一个子层准备输入</td><td>否</td></tr>
+<tr><td>Self-Attention（本课起）</td><td>让位置 q 从允许的 token 位置汇集信息</td><td>是，这是 decoder layer 的跨 token 通信阶段</td></tr>
+<tr><td>Residual add</td><td>把子层计算出的改变量加回原 hidden state</td><td>它只做同位置相加</td></tr>
+<tr><td>Gated FFN / MLP（0005）</td><td>逐 token 进一步变换已经汇集好的特征</td><td>否，但输入已经含 Attention 汇集的上下文</td></tr></table>
+<div class="card"><strong>本课的边界：</strong>只把 Self-Attention 内核缩小为一组 Q/K/V（single head，单头）来学清计算。真实模型还会有 Q/K/V Linear projection、多个 head、output projection、RoPE、KV Cache 等；它们的位置会在本课说明，但其独立实现分别在 0007、0008、0010 验收。</div>
 
-<section><h2>2. 先用 D=1 得到可手算的精确结果</h2>
-<p>令 B=1、S=3、D=1：</p>
+<h3>模块 B 各课怎样装回同一条 Transformer 数据流</h3>
+<table><tr><th>课次</th><th>加入的部件</th><th>在整体中的作用</th></tr>
+<tr><td>0006</td><td>单头 causal attention</td><td>学会一个 query 如何从自己和过去位置读取信息</td></tr>
+<tr><td>0007</td><td>MHA / GQA</td><td>并行使用多组 attention 子空间，并减少 K/V head 数以节省 Cache</td></tr>
+<tr><td>0008</td><td>RoPE</td><td>把位置信息写入 Q/K，使 score 能反映相对位置</td></tr>
+<tr><td>0009</td><td>Tiny Decoder Layer</td><td>把 RMSNorm、Attention、FFN 和两条 residual 真正组装起来</td></tr>
+<tr><td>0010</td><td>Prefill / decode / KV Cache</td><td>复用过去的 K/V，避免每生成一个 token 都重算全部历史</td></tr>
+<tr><td>0011</td><td>Tiny Causal LM</td><td>加 embedding、最终 norm、LM Head 和生成循环，形成可生成 token 的小模型</td></tr></table></section>
+
+<section><h2>2. 先补上课程表没有直接写出的 Transformer 心智模型</h2>
+<p>下面这些不是额外背诵点，而是理解后续每个算子的坐标系。没有它们，Attention、RoPE、KV Cache 和 export 会变成四块互不相连的代码。</p>
+
+<h3>2.1 本模块实现的是 decoder-only Causal LM</h3>
+<p><strong>LM</strong> 是 Language Model（语言模型）；<strong>Causal LM</strong> 按从左到右的条件概率预测下一个 token。对 token 序列 <code>t0,t1,t2</code>，模型学习的是：</p>
+<pre>P(t0,t1,t2) = P(t0) * P(t1 | t0) * P(t2 | t0,t1)</pre>
+<p>所以位置 2 可以使用位置 0、1、2 的输入表示，位置 1 不能使用位置 2。causal mask 不是随手加的优化，而是模型概率定义在 tensor 计算中的落实。</p>
+<p>Transformer 还有 encoder-only、encoder-decoder 等结构；它们可能使用双向 self-attention 或 cross-attention（Q 来自一个序列、K/V 来自另一个序列）。本项目目标是 Qwen 类 decoder-only 模型，本课只讲同一 hidden sequence 产生 Q/K/V 的 causal self-attention。</p>
+
+<h3>2.2 Token、embedding、hidden state 和 logits 不是同一种东西</h3>
+<table><tr><th>对象</th><th>例子 shape</th><th>含义</th></tr>
+<tr><td>token ids</td><td><code>[B,S]</code>，整数</td><td>分词器给出的词表编号，不含 H 维特征</td></tr>
+<tr><td>embedding / hidden states</td><td><code>[B,S,H]</code>，浮点数</td><td>每个 token 在模型内部的 H 维表示；经过每层后含义不断更新</td></tr>
+<tr><td>Q/K/V</td><td>单头先看 <code>[B,S,D]</code></td><td>由当前层 hidden states 临时投影出的匹配/内容表示</td></tr>
+<tr><td>logits</td><td><code>[B,S,VocabSize]</code></td><td>每个词表 token 的未归一化下一个-token 分数</td></tr></table>
+<p>Attention 不直接读字符串，也不直接输出 token id。它只把 hidden vectors 变成新的 hidden vectors；经过所有层和 LM Head 后才得到词表 logits。</p>
+
+<h3>2.3 Residual stream 是贯穿所有层的主干</h3>
+<p>可以把 <code>hidden_states [B,S,H]</code> 看成一条 residual stream（残差主干）：每个 Attention 或 FFN 子层都根据当前主干计算一个 <code>[B,S,H]</code> 改变量，再加回主干。它不是程序中的全局变量，而是层与层之间持续传递的运行 tensor。</p>
+<pre>主干新值 = 主干旧值 + Attention 产生的改变量
+主干再新值 = 主干新值 + FFN 产生的改变量</pre>
+<p>这解释了为什么 Attention 最终必须通过合并 heads 和 <code>o_proj</code> 回到 H：只有 shape 恢复为 <code>[B,S,H]</code> 才能与 residual 相加。某一层的 Attention 把过去信息写进位置 q 的 hidden vector；后面的 FFN 虽不跨 token，也能加工这份已经汇入的上下文；再下一层 Attention 可继续重组它。</p>
+
+<h3>2.4 参数、激活与 Cache 要分开</h3>
+<table><tr><th>类别</th><th>生命周期</th><th>例子</th></tr>
+<tr><td>Parameter（参数）</td><td>训练学得；推理时跨请求反复使用</td><td>q/k/v/o projection weight、RMSNorm weight、FFN weight</td></tr>
+<tr><td>Activation（激活/运行 tensor）</td><td>某次 forward 临时产生</td><td>hidden_states、Q、scores、weights、Attention output</td></tr>
+<tr><td>KV Cache（键值缓存）</td><td>某次生成请求内跨 decode step 保留</td><td>各 layer 已处理历史 token 的 K 和 V</td></tr></table>
+<p>KV Cache 不是模型参数，也不是把 attention weights 缓存下来。后续生成新 token 时，新 Q 仍需与历史 K 算 score，再用新 weights 读取历史 V。</p>
+
+<h3>2.5 同一模型有三种重要执行视角</h3>
+<table><tr><th>视角</th><th>输入长度</th><th>Attention 做什么</th></tr>
+<tr><td>训练/full-sequence</td><td>一次输入整段 S</td><td>并行算所有 q×k，再用 causal mask 防止未来泄漏</td></tr>
+<tr><td>Prefill</td><td>推理时一次处理整个 prompt</td><td>得到 prompt 各位置表示，并为每层建立历史 K/V Cache</td></tr>
+<tr><td>Decode step</td><td>通常一次只输入新 token，query length=1</td><td>新 Q 读取 Cache 中所有历史 K/V，再把新 K/V 追加到 Cache</td></tr></table>
+<p>本课先用 full-sequence 的方形 scores <code>[B,S,S]</code> 建立概念。到 0010 时 query length 可能是 1，而 key length 是累计历史长度，此时 scores 会是 <code>[B,1,S_total]</code>；“softmax 沿 key axis”仍然不变。这是公式跨执行形态保持稳定的核心。</p>
+
+<h3>2.6 Causal mask 与 padding mask 解决不同问题</h3>
+<ul><li><strong>Causal mask：</strong>按时间方向禁止 <code>k&gt;q</code>，防止看未来；由位置关系决定。</li>
+<li><strong>Padding mask：</strong>批处理不同长度序列时，禁止读取补齐用的 PAD 位置；由每条样本的有效长度决定。</li></ul>
+<p>二者最终都可能把某些 score 设为极小值，但语义不同。本课代码只实现 causal mask，不能据此假设真实批处理不需要 padding 处理。</p>
+
+<h3>2.7 Attention 是动态路由，不是完整的模型记忆</h3>
+<p>Attention weights 会随输入和 query 改变，因此更像一次 forward 中动态计算的读取路由。模型长期知识主要编码在训练得到的参数中；当前请求的历史信息存在各层 hidden computation 和推理时的 KV Cache 中。把 Attention 简称为“记忆”会掩盖参数、激活和 Cache 的边界。</p>
+
+<div class="card"><strong>贯穿后续课程的四个问题：</strong>任何新组件都要回答：输入来自哪里？它沿哪个 axis 读写哪些位置？输出交给谁并怎样回到 residual stream？full-sequence、prefill 和 decode 时 shape/状态有什么变化？</div></section>
+
+<section><h2>3. 进入条件、必须从零解释的内容与成果</h2>
+<div class="card"><strong>可以依赖：</strong>你已通过 rank/shape/axis、<code>[B,S,H]</code>、Linear、transpose、RMSNorm、FFN，以及参数 tensor 和运行 tensor 的区别。<br><strong>不能依赖：</strong>你尚未证明 Q/K/V 的角色、score、<code>sqrt(D)</code> scale、causal mask、softmax key axis 和 value 加权；本课全部从零建立。</div>
+<p>本课运行时直接接收 Q、K、V，以便只研究 Attention 内核。三者都是 rank 3 tensor：</p>
+<table><tr><th>tensor</th><th>shape</th><th>三个 axis</th></tr>
+<tr><td>Q / K / V</td><td><code>[B,S,D]</code></td><td>axis 0=batch；axis 1=token position；axis 2=head 内的 feature</td></tr></table>
+<p><code>D</code> 是 head dimension（当前这个 attention head 的特征数）。本课成果是亲手得到 score/weights <code>[B,S_query,S_key]</code>、output <code>[B,S,D]</code>，并用测试证明未来 token 不能影响过去输出。</p></section>
+
+<section><h2>4. Q、K、V 从哪里来，为什么要分成三种角色</h2>
+<p>Self-Attention 中的 <strong>self</strong> 表示 Q、K、V 都来自同一批输入 hidden states，而不是说三者数值相同。真实 decoder 会用三组不同的 Linear 参数：</p>
+<pre>x = input_rmsnorm(hidden_states)  # [B,S,H]
+Q = q_proj(x)                    # [B,S,D]，本课单头简化
+K = k_proj(x)                    # [B,S,D]
+V = v_proj(x)                    # [B,S,D]</pre>
+<p>同一个 token 的向量 <code>x[b,s,:]</code> 经过三套不同权重，得到三种用途不同的表示：</p>
+<table><tr><th>名称</th><th>英文与角色</th><th>它参与哪一步</th></tr>
+<tr><td>Q</td><td><strong>Query</strong>，当前位置 q 发出的“我要按哪些特征寻找信息”的匹配向量</td><td>Q[q] 与所有允许的 K[k] 比较</td></tr>
+<tr><td>K</td><td><strong>Key</strong>，位置 k 提供的“我适合被怎样匹配”的索引向量</td><td>与 Q 点积，产生读取强度 score</td></tr>
+<tr><td>V</td><td><strong>Value</strong>，位置 k 真正可被读走并汇入输出的内容向量</td><td>由 softmax 权重加权求和</td></tr></table>
+<p>可以把它暂时类比为 C++ 中“先按索引计算权重，再用权重读取 payload”：Q/K 用来算地址相关性，V 是 payload。但边界必须说清：Q 不是自然语言问题，K 不是哈希表字符串键，V 也不是原 token；它们都是模型学习出的浮点向量，而且是连续的软匹配。</p>
+<div class="card"><strong>最重要的分工：</strong>Q 和 K 决定“从每个位置读多少”；V 决定“从那个位置读到什么”。改变 V 不会改变 attention weights；改变 Q 或 K 通常会改变 weights。</div></section>
+
+<section><h2>5. Score：固定一个 query，逐个 key 做点积</h2>
+<p><strong>score</strong> 是匹配分数。先不用矩阵乘法，手算 <code>D=2</code>。固定 query 位置 <code>q=1</code>：</p>
+<pre>Q[1] = [1, 2]
+K[0] = [1, 0]
+K[1] = [0, 1]
+K[2] = [1, 1]
+
+未缩放 dot score(q=1,k=0) = 1*1 + 2*0 = 1
+未缩放 dot score(q=1,k=1) = 1*0 + 2*1 = 2
+未缩放 dot score(q=1,k=2) = 1*1 + 2*1 = 3</pre>
+<p>点积对 feature axis 的两个元素相乘后求和。它把两个长度 D 的向量变成一个标量。对所有 q、k 都这样算，就得到一个二维 score 表；加上 batch 后是 rank 3：</p>
+<pre>Q:                    [B,S_query,D]
+K:                    [B,S_key,D]
+K.transpose(-2,-1):  [B,D,S_key]
+Q @ K^T:             [B,S_query,S_key]</pre>
+<p>例如 Q、K 都是 <code>[2,5,4]</code>：batch 2 保留；中间的 D=4 被矩阵乘法求和；留下 5 个 query 行和 5 个 key 列，所以 scores 是 <code>[2,5,5]</code>。</p>
+<pre>raw_score[b,q,k] = Σ(d=0..D-1) Q[b,q,d] * K[b,k,d]</pre>
+<p><code>q</code> 是 score 表的行，<code>k</code> 是列。<code>Q @ K.transpose(-2,-1)</code> 只是把上述循环批量执行，不会把 Q、K、V 拼在一起。</p></section>
+
+<section><h2>6. Scale：为什么 score 要除以 sqrt(D)</h2>
+<p><strong>scale</strong> 是缩放。raw score 是 D 项乘积的和。若各项大小相近且有正有负，D 增大时这个和的典型波动会增大；在常见独立、零均值的直觉假设下，方差随 D 增长，标准差约随 <code>sqrt(D)</code> 增长。因此使用：</p>
+<pre>score[b,q,k] = raw_score[b,q,k] / sqrt(D)</pre>
+<p>这不是为了改变 shape，而是控制送入 softmax 的数值尺度。若 score 差距过大，softmax 容易极端接近 0 或 1，其他位置几乎没有权重，训练时梯度也容易变得很小。</p>
+<p>继续上一节 <code>D=2</code> 的数值：<code>sqrt(2)≈1.414</code>，缩放后的 q=1 行约为 <code>[0.707,1.414,2.121]</code>。三个元素仍对应三个 key，shape 没变。</p>
+<div class="warn card"><strong>不能除以 sqrt(S)：</strong>D 是每个点积累加的项数；S 是有多少个 key。点积的数值尺度由 D 决定，而不是由序列长度决定。</div></section>
+
+<section><h2>7. Causal mask：为什么 decoder 必须遮住未来</h2>
+<p><strong>causal</strong> 表示输出位置 q 只依赖位置 <code>k&lt;=q</code>。训练时整段序列可以并行送入模型，但预测位置 q 时不能偷看 q 后面的正确 token，否则训练与逐 token 生成的条件不一致。</p>
+<p><strong>mask</strong> 是标记哪些 score 禁止参与后续计算的布尔 tensor。对于 <code>S=4</code>，行是 query q，列是 key k：</p>
+<pre>future_mask[q,k]（True=禁止，False=允许）
+          k0     k1     k2     k3
+q0      False   True   True   True
+q1      False  False   True   True
+q2      False  False  False   True
+q3      False  False  False  False
+
+规则：k > q 的主对角线上方为 True；k <= q 为 False。</pre>
+<p>PyTorch 的 <code>torch.triu(..., diagonal=1)</code> 取主对角线上方。随后 <code>masked_fill(mask, -inf)</code> 把未来 score 换成负无穷：</p>
+<pre>future_mask = torch.triu(torch.ones(S, S, dtype=torch.bool), diagonal=1)
+masked_scores = scores.masked_fill(future_mask, float("-inf"))</pre>
+<p><code>[S,S]</code> mask 广播到每个 batch 的 <code>[B,S,S]</code> scores。mask 必须在 softmax 前应用，因为 <code>exp(-inf)=0</code>，被禁止位置才能在归一化时获得严格为 0 的权重。</p></section>
+
+<section><h2>8. Softmax：对固定 query 的所有 key 做归一化</h2>
+<p><strong>softmax</strong> 把一行任意实数 score 转成非负、总和为 1 的权重。固定 batch b 和 query q，对 key 轴计算：</p>
+<pre>weights[b,q,k] = exp(masked_score[b,q,k])
+                 / Σ(j=0..S_key-1) exp(masked_score[b,q,j])</pre>
+<p>分母中的 j 遍历这一行的所有 key。它不是沿 D 轴，因为 scores 里 D 已经在点积阶段被求和消失；也不是沿 query 轴，因为每个 query 都需要自己独立的一组“读取哪些 key”的权重。</p>
+<p>小例子：一行允许的 score 是 <code>[0,1]</code>：</p>
+<pre>exp(0)=1，exp(1)≈2.718
+总和≈3.718
+weights≈[1/3.718, 2.718/3.718]≈[0.269,0.731]</pre>
+<p>若第三个未来 score 已变成 <code>-inf</code>，其指数为 0，所以 <code>[0,1,-inf]</code> 得到约 <code>[0.269,0.731,0]</code>。代码使用 <code>F.softmax(masked_scores, dim=-1)</code>；<code>dim=-1</code> 是最后一个 axis，即 key axis。</p>
+<p class="small">数值实现通常会先从一行所有 score 中减去该行最大值再取指数，以避免指数溢出；每个 score 同减一个常数不会改变 softmax 结果。PyTorch 的实现负责这种数值处理。</p></section>
+
+<section><h2>9. Value 加权：weights 决定读多少，V 提供内容</h2>
+<p>固定 query q 后，我们已有一行权重。现在沿 key 轴对 V 做加权和。假设某行：</p>
+<pre>weights[q] = [0.25, 0.75]
+V[0] = [2, 4]
+V[1] = [6, 8]
+
+output[q, feature 0] = 0.25*2 + 0.75*6 = 5
+output[q, feature 1] = 0.25*4 + 0.75*8 = 7
+所以 output[q] = [5,7]</pre>
+<p>每个 output feature 都使用同一行 attention weights，但读取 V 中对应的 feature。逐元素公式是：</p>
+<pre>output[b,q,d] = Σ(k=0..S_key-1) weights[b,q,k] * V[b,k,d]</pre>
+<p>这里求和轴是 key position k，留下 b、q、d，所以：</p>
+<pre>weights: [B,S_query,S_key]
+V:       [B,S_key,D]
+output:  [B,S_query,D]</pre>
+<div class="card">score 阶段对 feature d 求和，得到 q×k 的关系表；output 阶段对 key k 求和，把多个位置的 V 内容汇成每个 q 的一个 D 维向量。这是两个不同的求和轴。</div></section>
+
+<section><h2>10. 把完整链条用 D=1 精确走一遍</h2>
+<p>现在再看最容易手算的 <code>B=1,S=3,D=1</code>。Q/K 全为 1，V 依次为 1、3、5：</p>
 <pre>Q = [[1], [1], [1]]
 K = [[1], [1], [1]]
 V = [[1], [3], [5]]</pre>
-<p>每个 query 与每个 key 的点积都是 1；D=1，所以除以 <code>sqrt(D)=1</code> 后 score 仍是 1。causal mask 只保留当前位置及过去：</p>
-<pre>允许矩阵 [q,k]:
-q0: [允许, 禁止, 禁止]
-q1: [允许, 允许, 禁止]
-q2: [允许, 允许, 允许]
+<ol>
+<li><strong>score：</strong>每对 Q/K 点积都是 <code>1*1=1</code>。</li>
+<li><strong>scale：</strong><code>sqrt(D)=sqrt(1)=1</code>，除完仍为 1。</li>
+<li><strong>mask：</strong>每行未来列变成 <code>-inf</code>。</li>
+<li><strong>softmax key axis：</strong>允许位置的 score 相等，因此允许的 key 平分总权重 1。</li>
+<li><strong>加权 V：</strong>每个 q 对允许的 V 求加权和。</li>
+</ol>
+<pre>masked scores                 weights                  output
+q0 [1,-inf,-inf]       →     [1,0,0]          →       1*1 = 1
+q1 [1,1,-inf]          →     [1/2,1/2,0]      →       1/2*1 + 1/2*3 = 2
+q2 [1,1,1]             →     [1/3,1/3,1/3]    →       1/3*1 + 1/3*3 + 1/3*5 = 3</pre>
+<p>注意：均匀不是 Attention 永远如此，而是这个特制例子中所有允许 score 恰好相等。一般情况下 Q/K 不同，softmax 权重也不同。</p></section>
 
-mask 后 scores:
-q0: [1, -inf, -inf]
-q1: [1,    1, -inf]
-q2: [1,    1,    1]</pre>
-<p>softmax 沿 key 轴计算。相等 score 会得到均匀权重：</p>
-<pre>weights q0 = [1,   0,   0]
-weights q1 = [1/2, 1/2, 0]
-weights q2 = [1/3, 1/3, 1/3]
+<section><h2>11. 改 Q、K、V 分别会影响什么</h2>
+<table><tr><th>修改</th><th>直接影响 score/weights 的范围</th><th>因果边界</th></tr>
+<tr><td><code>Q[:,q,:]</code></td><td>scores 的第 q 行：这个 query 对各 key 的匹配</td><td>仍不能越过 mask 读取未来</td></tr>
+<tr><td><code>K[:,k,:]</code></td><td>scores 的第 k 列：所有能看到位置 k 的 query 对它的匹配</td><td>只有 <code>q&gt;=k</code> 的行可能受影响</td></tr>
+<tr><td><code>V[:,k,:]</code></td><td>不改变 scores 或 weights；改变读取到的内容</td><td>只有对位置 k 权重非零的 <code>q&gt;=k</code> 输出可能改变</td></tr></table>
+<p>因此，只改 <code>V[:,2,:]</code> 时，q=0、1 的输出必须完全不变，q=2 可能变化。这是因果行为测试，不只是 shape 测试。</p></section>
 
-output q0 = 1*1                         = 1
-output q1 = 1/2*1 + 1/2*3              = 2
-output q2 = 1/3*1 + 1/3*3 + 1/3*5      = 3</pre>
-<div class="card">score 决定“读多少”，V 提供“读到的内容”。最终 output 是同一 query 行的 attention weights 对所有允许 V 的加权和。</div></section>
+<section><h2>12. Attention 输出怎样回到 Transformer 主路径</h2>
+<p>真实多头实现中，各 head 的输出会合并回 H 个特征，再经过 <code>o_proj</code>（output projection，输出线性投影）产生 Attention 子层的改变量：</p>
+<pre>normed = input_rmsnorm(hidden_states)        # [B,S,H]
+Q, K, V = q_proj(normed), k_proj(normed), v_proj(normed)
+head_context = causal_attention(Q, K, V)     # 本课研究的内核
+attention_delta = o_proj(merge_heads(...))   # [B,S,H]
+h = hidden_states + attention_delta          # residual 1
 
-<section><h2>3. 推广到 D 个特征和完整 shape</h2>
-<pre>Q:                    [B,S,D]
-K:                    [B,S,D]
-K.transpose(-2,-1):  [B,D,S]
-Q @ K^T:             [B,S_query,S_key]</pre>
-<p>逐元素 score 公式：</p>
-<pre>score[b,q,k] = sum over d of Q[b,q,d] * K[b,k,d] / sqrt(D)</pre>
-<p>矩阵乘法只对 D 轴求和，留下 query 和 key 两个 S 轴。mask shape 是 <code>[S,S]</code>，广播到所有 B。softmax 使用 <code>dim=-1</code>，即每个 query 固定后沿 key 轴归一化。</p>
-<pre>weights = softmax(masked_scores, dim=-1)  # [B,S_query,S_key]
-output  = weights @ V                    # [B,S,D]</pre>
-<p>output 的逐元素关系：</p>
-<pre>output[b,q,d] = sum over k of weights[b,q,k] * V[b,k,d]</pre></section>
+normed2 = post_attention_rmsnorm(h)
+ffn_delta = gated_ffn(normed2)                # [B,S,H]
+layer_output = h + ffn_delta                  # residual 2</pre>
+<p>本课函数输出的是单头 <code>[B,S,D]</code> context，还不是完整 decoder layer。0007 会解释多个 head 如何组合；0009 才要求把两条 residual 和 FFN 组装成 layer。这里先看全图，是为了知道每一步服务于哪里，而不是提前考后续实现。</p></section>
 
-<section><h2>4. causal mask 为什么必须在 softmax 前</h2>
-<p>禁止未来 key 的标准做法是把对应 score 设成负无穷，再做 softmax。因为 <code>exp(-inf)=0</code>，未来位置权重严格为 0，允许位置重新归一化后每行和为 1。</p>
-<div class="warn card">如果先 softmax 再把未来权重设为 0，剩余权重行和会小于 1；除非额外重新归一化，否则已不是同一个 attention 分布。</div>
-<p>修改 V 的未来位置 2 时，query 0、1 都被 mask 阻止读取它，所以这两个输出必须保持不变；query 2 可以读取位置 2，因此可能改变。这是比“shape 正确”更强的因果性测试。</p></section>
-
-<section><h2>5. 为什么除以 sqrt(D)</h2>
-<p>点积是 D 项乘积之和。D 增大时，score 的典型幅度也容易增大，使 softmax 过度尖锐。除以 <code>sqrt(D)</code> 把 score 尺度控制在更稳定的范围。scale 不改变 shape，只改变 softmax 前的数值。</p>
-<p>代码必须从 Q 的最后一维读取 D，不能把 D 写成 S 或模型 hidden size。</p></section>
-
-<section><h2>6. PyTorch 实现与调试顺序</h2>
+<section><h2>13. PyTorch 代码与数学逐行对应</h2>
 <pre>D = query.shape[-1]
-scores = query @ key.transpose(-2, -1) / sqrt(D)
-future_mask = triu(ones(S,S,bool), diagonal=1)
-masked_scores = scores.masked_fill(future_mask, -inf)
-weights = softmax(masked_scores, dim=-1)
-output = weights @ value</pre>
-<p>依次检查：Q/K/V shape 相等；scores 为 `[B,S,S]`；mask 对角线和下方允许；weights 每行和为 1；未来权重为 0；output 为 `[B,S,D]`。</p></section>
+# Q [B,S,D] @ K^T [B,D,S]，对 D 求和
+scores = query @ key.transpose(-2, -1) / math.sqrt(D)
 
-<section><h2>7. 引导、独立作业与闭卷门禁</h2>
-<ol><li>运行 <code>python exercises/0006_explore_single_head_attention.py</code>，核对精确的 1、2、3 输出。</li><li>完成 <code>exercises/0006_single_head_causal_attention.py</code> 的 TODO。</li><li>查看 <code>reference/0006-single-head-attention-cheatsheet.html</code>，然后关闭资料完成闭卷测试。</li></ol>
-<p>指定资料：<a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a> 第 3.2 节；PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.matmul.html">matmul</a>、<a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.softmax.html">softmax</a> 和 <a href="https://docs.pytorch.org/docs/stable/generated/torch.Tensor.masked_fill.html">masked_fill</a>。正文已足够完成作业，外链只用于核实。</p></section>
-</body></html>
+# [S,S]，主对角线上方 True 表示未来 key 禁止
+future_mask = torch.triu(
+    torch.ones(S, S, dtype=torch.bool, device=query.device), diagonal=1
+)
+masked_scores = scores.masked_fill(future_mask, float("-inf"))
+
+# 固定 b、q，沿最后的 key axis 归一化
+weights = F.softmax(masked_scores, dim=-1)
+
+# [B,S_query,S_key] @ [B,S_key,D]，对 key 求和
+output = weights @ value</pre>
+<p>推荐按执行顺序打印并检查：Q/K/V shape → raw scores → future mask → masked scores → weights → 每行权重和 → output。这样某一步错误时能定位，而不是只看最后结果。</p></section>
+
+<section><h2>14. 常见错误以及为什么错</h2>
+<table><tr><th>错误</th><th>后果</th></tr>
+<tr><td><code>key</code> 不 transpose</td><td>最后两个矩阵轴无法按 D 配对，或得到错误语义</td></tr>
+<tr><td>softmax 沿 query axis</td><td>变成“固定 key 在多个 query 间分配”，不是每个 query 选择 key</td></tr>
+<tr><td>mask 在 softmax 后才清零</td><td>允许位置的剩余权重和小于 1；不是正确归一化分布</td></tr>
+<tr><td>把主对角线也 mask</td><td>位置 q 连自己都不能读取；q=0 会没有任何合法 key</td></tr>
+<tr><td>除以 <code>sqrt(S)</code></td><td>混淆“点积累加项数 D”和“key 数量 S”</td></tr>
+<tr><td><code>weights * V</code> 直接逐元素乘</td><td><code>[B,S,S]</code> 与 <code>[B,S,D]</code> 的轴语义不同；需要矩阵乘法沿 key 求和</td></tr>
+<tr><td>只检查 output shape</td><td>mask 方向、softmax axis 或数值都可能错但 shape 仍正确</td></tr></table></section>
+
+<section><h2>15. 引导练习、独立作业与闭卷门禁</h2>
+<ol>
+<li>先运行 <code>python exercises/0006_explore_single_head_attention.py</code>，逐项对照 raw score、mask、masked score、softmax 和 output。</li>
+<li>完成 <code>exercises/0006_single_head_causal_attention.py</code> 的 TODO，并运行测试。</li>
+<li>使用 <code>reference/0006-single-head-attention-cheatsheet.html</code> 复盘整体位置和两次求和。</li>
+<li>关闭课程、代码和速查表，完成 <code>assessments/0006-single-head-causal-attention.md</code>。</li>
+</ol>
+<p>指定资料：<a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a> 第 3.2 节用于核对 scaled dot-product attention；PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.matmul.html">matmul</a>、<a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.softmax.html">softmax</a> 和 <a href="https://docs.pytorch.org/docs/stable/generated/torch.Tensor.masked_fill.html">masked_fill</a> 用于核对 API。外链是证据和延伸阅读；即使不打开，本文也足够完成作业。</p>
+<p><strong>修订后的门禁：</strong>独立作业与关键题 1、2、3、4、6 通过，且总分至少 80，才进入 0007。第 4 题验证 Q/K/V 与两个求和轴，第 6 题验证 Attention 能否放回 Transformer 数据流；这些条件在提交前公布。课程资料的这次缺失不计为你的答错或知识缺口。</p></section>
+</body>
+</html>

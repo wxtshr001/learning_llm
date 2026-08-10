@@ -1,6 +1,20 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>0006 单头因果注意力速查</title><style>body{max-width:850px;margin:auto;padding:30px;font:16px/1.65 sans-serif}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef}</style></head><body><h1>单头 Causal Attention 速查</h1><pre>Q,K,V: [B,S,D]
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>0006 单头因果注意力速查</title><style>body{max-width:900px;margin:auto;padding:30px;font:16px/1.65 sans-serif}section{border-top:1px solid #ccd6d2;padding:18px 0}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef;padding:.1em .3em}table{border-collapse:collapse;width:100%}th,td{padding:.55em;border-bottom:1px solid #ddd;text-align:left}</style></head><body>
+<h1>单头 Causal Attention 速查</h1>
+<section><h2>在 decoder layer 中的位置</h2><pre>hidden_states
+ → RMSNorm → Q/K/V projections
+ → causal attention（本课）→ merge/o_proj → + residual
+ → RMSNorm → gated FFN → + residual
+ → next decoder layer
+
+全部 layers → final norm → LM Head → next-token logits</pre></section>
+<section><h2>Q/K/V 分工</h2><table><tr><th>Q</th><td>query：当前位置按什么特征寻找</td></tr><tr><th>K</th><td>key：每个位置按什么特征被匹配</td></tr><tr><th>V</th><td>value：匹配后真正被加权读取的内容</td></tr></table><p>Q/K 决定读多少；V 决定读到什么。</p></section>
+<section><h2>完整内核</h2><pre>Q,K,V: [B,S,D]
 K^T:   [B,D,S]
 scores = Q @ K^T / sqrt(D)       # [B,S_query,S_key]
 scores = scores.masked_fill(future_mask, -inf)
 weights = softmax(scores, dim=-1) # 沿 key 轴，每行和 1
-output = weights @ V              # [B,S,D]</pre><p><code>score[b,q,k]=sum_d Q[b,q,d]*K[b,k,d]/sqrt(D)</code></p><p><code>output[b,q,d]=sum_k weights[b,q,k]*V[b,k,d]</code></p><p>causal 条件：仅允许 <code>k&lt;=q</code>。未来权重为 0，修改未来 V 不得改变过去 query 的输出。</p><p><a href="../lessons/0006-single-head-causal-attention.html">返回课程</a></p></body></html>
+output = weights @ V              # [B,S_query,D]</pre>
+<p><code>score[b,q,k]=sum_d Q[b,q,d]*K[b,k,d]/sqrt(D)</code></p><p><code>output[b,q,d]=sum_k weights[b,q,k]*V[b,k,d]</code></p></section>
+<section><h2>因果与执行形态</h2><p>causal 条件：仅允许 <code>k&lt;=q</code>。未来权重为 0，修改未来 V 不得改变过去 query 的输出。</p><table><tr><th>full sequence / prefill</th><td>多个 query，score 常为方形；mask 防未来</td></tr><tr><th>decode</th><td>通常一个新 query 读取历史 K/V Cache；softmax 仍沿 key axis</td></tr></table><p>KV Cache 保存历史 K/V，不保存 weights，也不是 Parameter。</p></section>
+<section><h2>四问定位法</h2><ol><li>输入从哪里来？</li><li>沿哪个 axis 读写哪些位置？</li><li>输出交给谁，怎样回 residual stream？</li><li>full-sequence、prefill、decode 时 shape/状态怎样变化？</li></ol></section>
+<p><a href="../lessons/0006-single-head-causal-attention.html">返回课程</a></p></body></html>

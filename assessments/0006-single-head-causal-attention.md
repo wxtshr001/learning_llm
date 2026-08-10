@@ -24,20 +24,22 @@
 2. 只修改 `K[:,2,:]` 时，哪些 query 位置可能改变，哪些必须不变？
 3. 为什么 mask 应在 softmax 之前应用？
 
-## 4. 两个求和轴（10 分）
+## 4. Q/K/V 角色与两个求和轴（关键题，10 分）
 
-分别补全 score 与 output 的逐元素公式，并说明 score 对哪个轴求和、output 对哪个轴求和。
+1. 用自己的话分别说明 Q、K、V 的角色，以及为什么不能只保留其中一种 tensor；
+2. 补全 score 与 output 的逐元素公式，并说明 score 对哪个轴求和、output 对哪个轴求和。
 
 ## 5. Scale 与数值稳定（10 分）
 
 为什么 score 除以 `sqrt(D)`？它是否改变 tensor shape？如果错误地除以 `sqrt(S)`，概念上错在哪里？
 
-## 6. Parity 与错误定位（10 分）
+## 6. Parity、错误定位与 Transformer 数据流（关键题，10 分）
 
-代码没有异常为什么不足以证明 attention 正确？至少列出四项你会检查的证据，其中必须包含一项 causal 行为证据。
+1. 代码没有异常为什么不足以证明 attention 正确？至少列出四项你会检查的证据，其中必须包含一项 causal 行为证据。
+2. 把本课单头 attention 放回 pre-norm decoder layer：从 `hidden_states` 开始，按顺序写出 RMSNorm、Q/K/V projection、本课内核、output projection、第一次 residual、第二次 RMSNorm、FFN 和第二次 residual。说明本课函数的 output 为什么还不是 next-token logits。
 
 ## 通过标准
 
-- 独立作业、第 1、2、3 题通过。
+- 独立作业、第 1、2、3、4、6 题通过。
 - 总分至少 80。
-- 未通过时只补 hand calculation、shape/axis 或 causal mask 中的实际缺口。
+- 未通过时只补 hand calculation、shape/axis、Q/K/V 角色、causal mask 或系统数据流中的实际缺口。
