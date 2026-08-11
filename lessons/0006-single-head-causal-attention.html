@@ -256,7 +256,7 @@ output = weights @ value</pre>
 
 <section><h2>15. 引导练习、独立作业与闭卷门禁</h2>
 <ol>
-<li>先运行 <code>python exercises/0006_explore_single_head_attention.py</code>，逐项对照 raw score、mask、masked score、softmax 和 output。</li>
+<li>在已安装 PyTorch 的隔离环境中运行 <code>python exercises/0006_explore_single_head_attention.py</code>。引导脚本全程使用 <code>torch.Tensor</code>、<code>@</code>、<code>transpose</code>、<code>masked_fill</code> 和 <code>F.softmax</code>，逐项对照 raw score、mask、masked score、weights 和 output。</li>
 <li>完成 <code>exercises/0006_single_head_causal_attention.py</code> 的 TODO，并运行测试。</li>
 <li>使用 <code>reference/0006-single-head-attention-cheatsheet.html</code> 复盘整体位置和两次求和。</li>
 <li>关闭课程、代码和速查表，完成 <code>assessments/0006-single-head-causal-attention.md</code>。</li>

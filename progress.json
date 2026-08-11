@@ -14,7 +14,7 @@
     "submission": "submissions/0006.md",
     "reference": "reference/0006-single-head-attention-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-11: rewritten from first principles with Transformer system placement, residual data flow, Q/K/V roles, full score-to-value derivation, and full-sequence/prefill/decode boundaries; PyTorch 2.13.0+cpu reference subsequently verified in the user-level environment",
+  "current_lesson_revision": "2026-08-11: rewritten from first principles with Transformer system placement and complete score-to-value derivation; guided exploration converted from Python lists to real torch.Tensor operations and verified with PyTorch 2.13.0+cpu",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R"],
   "next_normal_lesson": "0007",

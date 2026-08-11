@@ -34,3 +34,11 @@
 - 用户级环境实测 Python 3.11.15、PyTorch 2.13.0+cpu，可正常运行 tensor 计算。
 - 使用 PyTorch reference 重新计算 0006：weights 为 `[1,0,0]`、`[1/2,1/2,0]`、`[1/3,1/3,1/3]`，output 为 `[1,2,3]`，未来 V 不影响过去输出的测试通过。
 - 独立作业仍保留给学习者完成的 TODO；reference 通过不代替独立作业门禁。
+
+## PyTorch 引导脚本一致性修订
+
+- 学习者指出：既然 PyTorch 环境已经可用，第 0006 课引导脚本不应继续用 `list[list[float]]` 模拟矩阵。
+- 裁决：这是课程实现与环境事实不一致，不是学习者知识问题。
+- `0006_explore_single_head_attention.py` 已改为真正的 `torch.Tensor` 计算，直接使用 batched matmul、`transpose`、布尔 mask、`masked_fill`、`F.softmax(dim=-1)` 和 weights@V。
+- 脚本仍打印全部中间 tensor，并保留 D=2 手算对照、weights 不受 V 改变、未来 V 不影响过去输出三类验证。
+- `0006_single_head_causal_attention.py` 继续保留 TODO，确保引导示范与独立作业分离。
