@@ -14,7 +14,7 @@
 - 第 0003 课最终裁决 92/100 并正式通过。初次评分错误增加了题面未声明的 dtype 条件，已按学习者异议更正并撤销 0003R。
 - 第 0004 课最终 97/100 并正式通过。
 - 第 0005 课首次提交 82/100，0005R 最终 90/100；统计量/Parameter/运行 tensor 与 Linear `[out,in]` 门禁通过，第 0005 课正式完成。
-- 当前是第 0006 课：单头 causal attention。初版从零解释和 Transformer 数据流不足已重写；用户级 PyTorch 环境确认后，引导脚本也已从 Python list 改为真实 `torch.Tensor`。等待学习者阅读和提交；不要生成第 0007 课。
+- 第 0006 课首次提交 87/100：手算、shape 主链、causal 行为、scale 与 PyTorch 主计算通过，但代码 device/positive-D contract、完整两轴公式和 decoder block 路径关键项未通过。当前进入短 0006R，只复测这些缺口；不要生成第 0007 课。
 
 精确文件和下一动作以 `CURRENT-STATE.md` 与 `progress.json` 为准。
 
@@ -34,4 +34,4 @@
 
 ## Resume procedure
 
-遵守 `AGENTS.md`，先拉取 `main`。收到 0006 后检查代码、精确手算、Q/K/V shape、softmax key axis 与 causal 行为；关键题或代码未通过不得进入 MHA/GQA。
+遵守 `AGENTS.md`，先拉取 `main`。收到 0006R 后只检查代码 contract、两个求和轴公式和完整 decoder block 路径；不要重复已经通过的 0006 第 1、2、3、5 题。

@@ -1,5 +1,6 @@
 # Teaching Notes
 
+- 2026-08-12：0006 首次提交 87/100。手算、shape 主链、causal、scale 与 PyTorch 主计算正确；完整 score/output 求和轴公式、Attention/output projection 在 residual 前的位置，以及 device/positive-D contract 未通过关键门禁。0006R 只复测这三项，不重复已证明内容。
 - 2026-08-11：确认用户级 PyTorch 可用后，Attention 引导脚本不得继续用 Python list 模拟 tensor。第 0006 课已改为真实 `torch.Tensor`、batched matmul、mask、softmax 和 value aggregation；纯 Python 逐元素计算只适合作为正文手算，不作为本阶段主脚本。
 - 2026-08-11：环境检查不能只调用 PATH 中的系统 Python。学习者指出 PyTorch 位于仓库外的用户级 venv；已用其中的 PyTorch 2.13.0+cpu 验证 0006 reference。`0000_verify_pytorch.py` 改为默认验证实际可用的 CPU/CUDA，并用 `--require-cuda` 表达真正的 GPU 前置条件。
 - 2026-08-11：学习者指出 0006 初版虽声明 Q/K/V、score、scale、mask、softmax axis 与 value 加权“必须从零解释”，正文却直接给公式和极简例子；这是课程设计缺陷，不是学习者失败。已重写为角色直觉、逐元素数字、shape/axis、完整计算链和代码映射。

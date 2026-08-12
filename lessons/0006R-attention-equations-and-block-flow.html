@@ -1,0 +1,39 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0006R：Attention 两次求和与 Block 路径</title><style>body{max-width:900px;margin:auto;padding:30px;font:17px/1.7 sans-serif;color:#17232a;background:#fbfaf6}section{border-top:1px solid #ccd6d2;padding:20px 0}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef;padding:.1em .3em}.card{border-left:5px solid #176b70;background:#edf7f4;padding:14px}</style></head><body>
+<h1>0006R：把 Attention 的两个求和轴接回 Decoder Block</h1>
+<p>这是一节约 25 分钟的针对性复测。已经通过的 weights 手算、shape 主链、causal 行为和 scale 不再重讲。</p>
+<section><h2>1. 一张数字表看清两个求和</h2>
+<p>固定 <code>b=0</code>、<code>q=1</code>，设 <code>D=2</code>，Q 为 <code>[1,2]</code>，两个 K 为 <code>[1,0]</code>、<code>[0,1]</code>：</p>
+<pre>score[0,1,0] = (1*1 + 2*0) / sqrt(2)
+score[0,1,1] = (1*0 + 2*1) / sqrt(2)
+
+score[b,q,k] = sum over d (Q[b,q,d] * K[b,k,d]) / sqrt(D)</pre>
+<p>第一次求和消掉 feature 轴 <code>d</code>，留下 <code>[b,q,k]</code>。softmax 后假设这一行 weights 是 <code>[0.25,0.75]</code>，V 为 <code>[[2,4],[6,8]]</code>：</p>
+<pre>output[0,1,0] = 0.25*2 + 0.75*6 = 5
+output[0,1,1] = 0.25*4 + 0.75*8 = 7
+
+output[b,q,d] = sum over k (weights[b,q,k] * V[b,k,d])</pre>
+<p>第二次求和消掉 key position 轴 <code>k</code>，留下 <code>[b,q,d]</code>。记忆句：<strong>score 沿 d 比较特征，output 沿 k 汇集位置。</strong></p></section>
+<section><h2>2. Attention 子层不能从 projection 直接跳到 residual</h2>
+<pre>hidden_states [B,S,H]
+  ├────────────────────────────── residual ──────────────────────┐
+  └→ RMSNorm → Q/K/V projections → causal attention             │
+       → merge heads（单头时是退化情况）→ output projection ────┤
+                                                                ↓
+                                                          add → h
+
+h ────────────────────────────── residual ───────────────────────┐
+└→ RMSNorm → gated FFN ──────────────────────────────────────────┤
+                                                               ↓
+                                                     add → layer_output</pre>
+<p>Q/K/V projection 只产生 Attention 的输入；causal attention 才跨 token 汇集 V；output projection 把 head 结果重新组合为 H 维改变量；然后才能与原 hidden_states 做第一次 residual add。</p>
+<p>多个 decoder layers 之后还要经过 final RMSNorm 和 LM Head，才从 <code>[B,S,H]</code> 变成 <code>[B,S,VocabSize]</code> logits。因此本课 attention output 不是 next-token logits。</p></section>
+<section><h2>3. 两个代码 contract</h2>
+<pre># D 必须严格大于 0
+if head_dim &lt;= 0:
+    raise ValueError(...)
+
+# mask 必须跟输入在同一个 device
+mask = make_causal_mask(sequence_length, query.device)</pre>
+<p><code>head_dim &lt; 0</code> 没有作用，因为 tensor shape 不可能为负；真正需要拒绝的是 D=0。把 mask 固定建在 CPU 会在 CUDA query 上发生 device mismatch。</p></section>
+<section><h2>4. 完成方式</h2><ol><li>运行 <code>exercises/0006R_explore_attention_axes.py</code>。</li><li>完成 <code>exercises/0006R_attention_contract.py</code> 的两个 TODO。</li><li>关闭本文，完成 <code>assessments/0006R-attention-equations-and-block-flow.md</code>。</li></ol><div class="card">门禁：代码全部测试通过；公式题和 block 路径题都通过。总分至少 80。</div></section>
+</body></html>

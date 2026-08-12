@@ -11,8 +11,8 @@ from torch.nn import functional as F
 def make_causal_mask(sequence_length: int, device: torch.device) -> torch.Tensor:
     """Return bool [S,S]; True means the key position is forbidden."""
     # TODO 1: positions above the main diagonal are future positions.
-    raise NotImplementedError
-
+    ret=torch.triu(torch.ones(sequence_length, sequence_length, dtype=torch.bool, device = device), diagonal=1)
+    return ret
 
 def single_head_causal_attention(
     query: torch.Tensor,
@@ -24,7 +24,19 @@ def single_head_causal_attention(
     # TODO 3: scores = Q @ K^T / sqrt(D), shape [B,S,S].
     # TODO 4: mask future keys before softmax over the key axis.
     # TODO 5: output = weights @ V, shape [B,S,D].
-    raise NotImplementedError
+    if query.ndim!=3 or key.ndim!=3 or value.ndim!=3:
+        raise ValueError("invalid shape")
+    if query.shape != key.shape or key.shape != value.shape:
+        raise ValueError("invalid shape")
+    _, sequence_length, dim_head = query.shape
+    if dim_head < 0:
+        raise ValueError("invalid dim")
+
+    scores=query@key.transpose(-2,-1) / math.sqrt(dim_head)
+    masked_scores = scores.masked_fill(make_causal_mask(sequence_length, torch.device("cpu")), float("-inf"))
+    weights = F.softmax(masked_scores, dim=-1)
+    output = weights@value
+    return output, weights
 
 
 def run_tests() -> None:

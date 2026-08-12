@@ -1,34 +1,35 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-11",
+  "updated_at": "2026-08-12",
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0006",
-    "title": "single-head causal attention",
-    "status": "in_progress",
-    "lesson": "lessons/0006-single-head-causal-attention.html",
-    "guided_exercise": "exercises/0006_explore_single_head_attention.py",
-    "exercise": "exercises/0006_single_head_causal_attention.py",
-    "assessment": "assessments/0006-single-head-causal-attention.md",
-    "submission": "submissions/0006.md",
+    "lesson_id": "0006R",
+    "title": "attention equations and decoder block flow remediation",
+    "status": "awaiting_submission",
+    "lesson": "lessons/0006R-attention-equations-and-block-flow.html",
+    "guided_exercise": "exercises/0006R_explore_attention_axes.py",
+    "exercise": "exercises/0006R_attention_contract.py",
+    "assessment": "assessments/0006R-attention-equations-and-block-flow.md",
+    "submission": "submissions/0006R.md",
     "reference": "reference/0006-single-head-attention-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-11: rewritten from first principles with Transformer system placement and complete score-to-value derivation; guided exploration converted from Python lists to real torch.Tensor operations and verified with PyTorch 2.13.0+cpu",
+  "current_lesson_revision": "2026-08-12: lesson 0006 scored 87 but failed critical code contract, complete equation-axis, and decoder-block-flow items; 0006R targets only those gaps",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R"],
   "next_normal_lesson": "0007",
-  "next_course_generated": true,
+  "next_course_generated": false,
   "gate": {
     "minimum_score": 80,
     "score": null,
-    "result": "awaiting_submission",
-    "critical_items": ["code", "question_1", "question_2", "question_3", "question_4", "question_6"],
-    "previous_adjudication": "lesson 0005R passed at 90; lesson 0006 course-design defect does not count as learner failure and 0006 remains awaiting submission"
+    "result": "awaiting_remediation_submission",
+    "critical_items": ["code", "question_1", "question_2"],
+    "failed_critical_items": ["0006_code_contract", "0006_question_4_equations", "0006_question_6_block_flow"],
+    "previous_attempt": "lesson 0006 scored 87; main attention calculation and questions 1, 2, 3, 5 passed; code device/positive-D contract, complete equation axes, and decoder block flow require 0006R"
   },
   "last_verified_evidence": [
     "submissions/0006-feedback.md",
-    "submissions/0005R-feedback.md",
-    "learning-records/0009-rmsnorm-gated-ffn-proven.md"
+    "submissions/0006.md",
+    "exercises/0006_single_head_causal_attention.py"
   ]
 }

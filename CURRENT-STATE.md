@@ -1,10 +1,10 @@
 # Current Learning State
 
-更新时间：2026-08-11
+更新时间：2026-08-12
 
 ## 当前门禁
 
-**0005R 90/100，通过；第 0006 课完成课程设计修订，仍在进行中。**
+**第 0006 课首次提交 87/100，但关键项未全部通过；当前进入 0006R 针对性复测。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -26,8 +26,10 @@
 
 ## 当前待验证能力
 
-- 单头 Q/K/V score、scale、causal mask、softmax key axis 与 value 加权尚未验证。
-- 能否把单头 Attention 放回 decoder-only Causal LM 的 residual stream，并区分 Parameter、activation、KV Cache 与 full-sequence/prefill/decode，尚未验证。
+- 已证明：单头 Attention 精确手算、主要 shape、softmax key axis、causal 行为、scale 和 PyTorch 主计算。
+- 待复测：scaled score 对 feature d 求和与 output 对 key k 求和的完整逐元素公式。
+- 待复测：Q/K/V projection → causal attention → output projection → residual 的完整 decoder block 顺序。
+- 待修正：mask 跟随 `query.device`，并严格拒绝 `D=0`。
 
 ## 课程设计修订
 
@@ -46,19 +48,20 @@
 
 ## 学习者下一步
 
-1. 从头阅读修订后的 `lessons/0006-single-head-causal-attention.html`；旧版阅读不计入门禁。
-2. 运行 `exercises/0006_explore_single_head_attention.py`。
-3. 完成 `exercises/0006_single_head_causal_attention.py` 的 TODO 并运行测试。
-4. 闭卷完成 `assessments/0006-single-head-causal-attention.md`，填写 `submissions/0006.md`。
+1. 阅读 `lessons/0006R-attention-equations-and-block-flow.html`。
+2. 运行 `exercises/0006R_explore_attention_axes.py`。
+3. 完成并运行 `exercises/0006R_attention_contract.py`。
+4. 闭卷完成 `assessments/0006R-attention-equations-and-block-flow.md`，填写 `submissions/0006R.md`。
 
 ## Agent 下一步
 
-- 收到 0006 前，不生成第 0007 课。
-- 独立作业、第 1、2、3、4、6 题通过且总分至少 80，才进入 MHA/GQA；第 4 题验证 Q/K/V 与求和轴，第 6 题验证 Transformer 数据流。
+- 收到 0006R 前，不生成第 0007 课。
+- 0006R 独立代码、公式题、block 路径题通过且总分至少 80，才正式完成 0006 并进入 MHA/GQA。
 
 ## 最近证据
 
 - `submissions/0006-feedback.md`
+- `submissions/0006.md`
 - `submissions/0005R-feedback.md`
 - `learning-records/0009-rmsnorm-gated-ffn-proven.md`
 
