@@ -19,14 +19,13 @@
 - 第 0004 课最终 97/100 通过；能解释 Parameter 注册、训练四步职责、梯度累积、finite difference 与推理模式。
 - 0005 独立实现已证明 RMSNorm/gated FFN 主数据流、parity、梯度和 token-local decoder 关系；RMS 手算与门控数值正确。
 - 第 0005 课已正式通过；能区分 RMSNorm statistic/Parameter/output，以及 Linear 构造、`[out,in]` storage 与运行 tensor。
-- 对单头 Attention、causal mask、增量解码和 KV Cache 有初步直觉，但尚不能据此跳过 tensor shape 推导。
-- 第 0006 课首次提交已证明单头 Attention 手算、shape 主链、softmax key axis、causal 行为、scale 与 PyTorch 主计算；仍需补齐两个求和轴的完整公式、Attention/output projection 在 residual 前的位置，以及 device/positive-D 代码 contract。
+- 第 0006 课已正式通过；能完成单头 Attention 手算、shape、softmax key axis、causal 行为、scale、两个求和轴与 PyTorch 实现，并能把 Attention/output projection 放回 decoder residual stream。
+- 已能处理 attention mask 的 device 与 positive-D 代码 contract；对增量解码和完整 KV Cache 仍只具初步直觉。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
 - Python/PyTorch API 的语义、报错边界和调试方法。
-- 单头 attention 的 Q/K/V score、`sqrt(D)` scale、causal mask、softmax key axis 和 value 加权。
 - GQA、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
 
 ## 强制教学适配
@@ -42,7 +41,7 @@
 
 ## 当前最近发展区
 
-当前进行 0006R：只补 scaled score/output 的两个求和轴、完整 decoder block 路径，以及 mask device/positive-D contract。第 0006 课已通过的手算、shape、causal、scale 与主计算不重复。
+第 0006 课已完成，当前暂停。下一最近发展区是 MHA/GQA，但只有学习者明确开始第 0007 课后才生成课程。
 
 ## 更新规则
 

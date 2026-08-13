@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-12",
+  "updated_at": "2026-08-14",
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
     "lesson_id": "0006R",
     "title": "attention equations and decoder block flow remediation",
-    "status": "awaiting_submission",
+    "status": "completed",
     "lesson": "lessons/0006R-attention-equations-and-block-flow.html",
     "guided_exercise": "exercises/0006R_explore_attention_axes.py",
     "exercise": "exercises/0006R_attention_contract.py",
@@ -14,22 +14,22 @@
     "submission": "submissions/0006R.md",
     "reference": "reference/0006-single-head-attention-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-12: lesson 0006 scored 87 but failed critical code contract, complete equation-axis, and decoder-block-flow items; 0006R targets only those gaps",
-  "completed_lessons": ["0001", "0002", "0003", "0004", "0005"],
-  "completed_remediation": ["0001R", "0001R2", "0002R", "0005R"],
+  "current_lesson_revision": "2026-08-14: lesson 0006R passed at 95; lesson 0006 is complete and the learner requested progress-only persistence without generating lesson 0007",
+  "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006"],
+  "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R"],
   "next_normal_lesson": "0007",
   "next_course_generated": false,
   "gate": {
     "minimum_score": 80,
-    "score": null,
-    "result": "awaiting_remediation_submission",
+    "score": 95,
+    "result": "passed",
     "critical_items": ["code", "question_1", "question_2"],
-    "failed_critical_items": ["0006_code_contract", "0006_question_4_equations", "0006_question_6_block_flow"],
-    "previous_attempt": "lesson 0006 scored 87; main attention calculation and questions 1, 2, 3, 5 passed; code device/positive-D contract, complete equation axes, and decoder block flow require 0006R"
+    "failed_critical_items": [],
+    "previous_attempt": "lesson 0006 scored 87; lesson 0006R passed at 95 after proving code contracts, complete equation axes, and decoder block flow"
   },
   "last_verified_evidence": [
-    "submissions/0006-feedback.md",
-    "submissions/0006.md",
-    "exercises/0006_single_head_causal_attention.py"
+    "submissions/0006R-feedback.md",
+    "submissions/0006R.md",
+    "learning-records/0010-single-head-causal-attention-proven.md"
   ]
 }

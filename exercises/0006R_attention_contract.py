@@ -5,12 +5,14 @@ import torch
 
 def validate_head_dim(head_dim: int) -> None:
     # TODO 1: raise ValueError unless D is strictly positive.
-    raise NotImplementedError
+    if head_dim <= 0:
+        raise ValueError("dim is not positive!")
 
 
 def make_mask_like(sequence_length: int, query: torch.Tensor) -> torch.Tensor:
     # TODO 2: return a bool [S,S] future mask on query.device.
-    raise NotImplementedError
+    retv = torch.triu(torch.ones(sequence_length, sequence_length, dtype=torch.bool, device=query.device), diagonal=1)
+    return retv
 
 
 def run_tests() -> None:
