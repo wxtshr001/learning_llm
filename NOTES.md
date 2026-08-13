@@ -1,5 +1,6 @@
 # Teaching Notes
 
+- 2026-08-14：开始 0007 MHA/GQA。课程按最终 on-device decode 目标反向组织：具体 head 映射 → shape/projection → Cache 字节 → prefill/decode 带宽边界 → Qwen 风格源码映射；强调 repeat 是计算映射、Cache 仍保存 Nkv heads，避免孤立讲概念。
 - 2026-08-14：0006R 95/100 通过。两个求和轴、decoder block 完整路径、positive-D 与 query.device contract 均已证明；求和上界/括号仅局部书写不规范，不升级为概念失败。按学习者要求只保存完成进度，不生成 0007。
 - 2026-08-12：0006 首次提交 87/100。手算、shape 主链、causal、scale 与 PyTorch 主计算正确；完整 score/output 求和轴公式、Attention/output projection 在 residual 前的位置，以及 device/positive-D contract 未通过关键门禁。0006R 只复测这三项，不重复已证明内容。
 - 2026-08-11：确认用户级 PyTorch 可用后，Attention 引导脚本不得继续用 Python list 模拟 tensor。第 0006 课已改为真实 `torch.Tensor`、batched matmul、mask、softmax 和 value aggregation；纯 Python 逐元素计算只适合作为正文手算，不作为本阶段主脚本。

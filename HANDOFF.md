@@ -14,7 +14,8 @@
 - 第 0003 课最终裁决 92/100 并正式通过。初次评分错误增加了题面未声明的 dtype 条件，已按学习者异议更正并撤销 0003R。
 - 第 0004 课最终 97/100 并正式通过。
 - 第 0005 课首次提交 82/100，0005R 最终 90/100；统计量/Parameter/运行 tensor 与 Linear `[out,in]` 门禁通过，第 0005 课正式完成。
-- 第 0006 课首次提交 87/100，0006R 最终 95/100；手算、shape、causal、scale、两个求和轴、decoder block 路径与代码 contract 全部通过，第 0006 课正式完成。按学习者要求暂停，尚未生成第 0007 课。
+- 第 0006 课首次提交 87/100，0006R 最终 95/100；全部关键项通过，第 0006 课正式完成。
+- 当前第 0007 课 MHA/GQA 已生成并开始；重点验证 `Nq/Nkv` 映射、完整 shape、KV Cache 字节与 decode 系统意义。收到提交前不要生成第 0008 课。
 
 精确文件和下一动作以 `CURRENT-STATE.md` 与 `progress.json` 为准。
 
@@ -34,4 +35,4 @@
 
 ## Resume procedure
 
-遵守 `AGENTS.md`，先拉取 `main`。不要重复第 0006 课；学习者明确要求开始新课时，再生成第 0007 课 MHA/GQA。
+遵守 `AGENTS.md`，先拉取 `main`。收到 0007 后复跑代码，并检查 head mapping、shape、Cache 计算和 Transformer inference 路径；关键项未通过不得进入 RoPE。

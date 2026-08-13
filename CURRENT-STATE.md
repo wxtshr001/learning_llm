@@ -4,7 +4,7 @@
 
 ## 当前门禁
 
-**0006R 95/100，通过；第 0006 课正式完成。当前暂停，尚未生成第 0007 课。**
+**0006R 95/100，通过；第 0007 课 MHA/GQA 已开始，等待学习者提交。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -33,6 +33,14 @@
 - 已修正并证明 mask 跟随 `query.device`，且严格拒绝 `D=0`。
 - 公式上界和括号有局部书写不规范，但轴语义、代码和运行证据一致，不作为概念缺口。
 
+## 第 0007 课范围
+
+- 从单头 Attention 推广到 MHA、GQA 和 MQA，重点是 `Nq`/`Nkv` 的连续分组映射。
+- 推导 Q/K/V projection、split、attention、merge、o_proj 的完整数字 shape。
+- 区分计算时逻辑展开 K/V 与 Cache 中实际保存的 `Nkv` heads。
+- 计算 K/V projection 参数与跨 layer 的 KV Cache 字节数。
+- 解释 GQA 对 decode 内存容量/带宽的意义，以及为什么不能由 head 比例直接推断端到端加速比。
+
 ## 课程设计修订
 
 - 学习者指出 0006 初版虽然声明“必须从零解释”，正文却直接给结论性例子与公式；同时没有交代 Transformer 整体、组件嵌入位置和数据流。
@@ -50,18 +58,18 @@
 
 ## 学习者下一步
 
-1. 第 0006 课已经完成，无需继续补测。
-2. 按此前要求，本次不生成新课程；等待学习者明确开始第 0007 课。
+1. 阅读 `lessons/0007-mha-gqa-and-kv-cache-cost.html`。
+2. 运行 `exercises/0007_explore_mha_gqa.py`，核对 Q head → KV head 映射与精确输出。
+3. 完成 `exercises/0007_mha_gqa.py` 的 TODO 并运行测试。
+4. 闭卷完成 `assessments/0007-mha-gqa.md`，填写 `submissions/0007.md`。
 
 ## Agent 下一步
 
-- 不再重复第 0006 课已经证明的内容。
-- 学习者明确要求开始时，再生成并开启第 0007 课 MHA/GQA。
+- 收到 0007 前不生成 0008。
+- 独立代码与闭卷第 1、2、5、6 题通过，且总分至少 80，才进入 RoPE。
 
 ## 最近证据
 
-- `submissions/0006-feedback.md`
-- `submissions/0006.md`
 - `submissions/0006R-feedback.md`
 - `learning-records/0010-single-head-causal-attention-proven.md`
 

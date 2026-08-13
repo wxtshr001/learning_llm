@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0007 MHA/GQA 速查</title><style>body{max-width:900px;margin:auto;padding:30px;font:16px/1.65 sans-serif;color:#17232a}section{border-top:1px solid #ccd6d2;padding:18px 0}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef;padding:.1em .3em}table{border-collapse:collapse;width:100%}th,td{padding:.55em;border-bottom:1px solid #ddd;text-align:left}</style></head><body>
+<h1>MHA / GQA / MQA 速查</h1>
+<section><h2>三个结构</h2><table><tr><th>MHA</th><td>Nkv=Nq，每个 Q head 独占 K/V head</td></tr><tr><th>GQA</th><td>1&lt;Nkv&lt;Nq，每组 Q heads 共享 K/V</td></tr><tr><th>MQA</th><td>Nkv=1，所有 Q heads 共享 K/V</td></tr></table>
+<pre>Nq % Nkv == 0
+group_size = Nq // Nkv
+kv_head = q_head // group_size
+
+Nq=4,Nkv=2: [0,0,1,1]</pre></section>
+<section><h2>shape</h2><pre>hidden: [B,S,H]
+q raw:  [B,S,Nq*D]  → Q [B,Nq,S,D]
+k/v raw:[B,S,Nkv*D] → K/V [B,Nkv,S,D]  # Cache 保存
+logical K/V for compute: [B,Nq,S,D]
+weights/head output: [B,Nq,S,S] / [B,Nq,S,D]
+merge: [B,S,Nq*D]
+o_proj: [B,S,H]</pre></section>
+<section><h2>projection</h2><pre>q_proj: Linear(H,Nq*D), weight [Nq*D,H]
+k_proj: Linear(H,Nkv*D), weight [Nkv*D,H]
+v_proj: Linear(H,Nkv*D), weight [Nkv*D,H]
+o_proj: Linear(Nq*D,H), weight [H,Nq*D]</pre><p>GQA 只减少 k/v projection；q/o 不因 Nkv 减少。</p></section>
+<section><h2>KV Cache</h2><pre>bytes = 2 * B * L * Nkv * S_cache * D * bytes_per_element
+        ↑ K+V
+
+GQA/MHA cache ratio = Nkv/Nq</pre><p>Cache 保存 repeat 前的 Nkv heads。Q 不缓存。repeat 是计算映射，不应把 expanded Nq K/V 存入 Cache。</p></section>
+<section><h2>系统路径</h2><pre>hidden → RMSNorm → q/k/v projections → split
+→ RoPE(Q,K) → update/read KV Cache
+→ GQA causal attention → merge → o_proj → residual</pre><p>Prefill 仍有 Nq 份 score；decode 读取历史 K/V，减少 Nkv 可降低 Cache 容量与带宽压力。端到端速度必须实测。</p></section>
+<p><a href="../lessons/0007-mha-gqa-and-kv-cache-cost.html">返回课程</a></p></body></html>

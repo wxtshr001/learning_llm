@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>0007：从 MHA 到 GQA——Head 映射与 KV Cache 成本</title>
+<style>body{max-width:1000px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.flow{white-space:pre-wrap}.small{font-size:.93em;color:#42555c}</style></head><body>
+<h1>0007：从 MHA 到 GQA——Head 映射与 KV Cache 成本</h1>
+<p>第 0006 课已经证明一个 attention head 怎样计算 score、mask、softmax 和 value 加权。本课不重复这条公式，而是回答三个系统问题：为什么并行多个 head？为什么现代 decoder 常让多个 Q head 共享较少的 K/V head？这怎样减少参数、KV Cache 容量和 decode 时的内存流量？</p>
+
+<section><h2>1. 本课在 Transformer 数据流中的位置</h2>
+<pre class="flow">hidden_states [B,S,H]
+  → RMSNorm
+  → q_proj / k_proj / v_proj
+  → split heads
+       Q [B,Nq,S,D]
+       K [B,Nkv,S,D] ─┐
+       V [B,Nkv,S,D] ─┴→ 按组供 Nq 个 Q head 使用
+  → 每个 Q head 独立执行第 0006 课的 causal attention
+  → head outputs [B,Nq,S,D]
+  → transpose + merge → [B,S,Nq*D]
+  → o_proj → [B,S,H]
+  → residual add</pre>
+<p><code>B</code> 是 batch size；<code>S</code> 是 sequence length；<code>H</code> 是 residual stream 的 hidden size；<code>D</code> 是每个 head 的特征数；<code>Nq</code> 是 query head 数；<code>Nkv</code> 是 key/value head 数。这里 Q、K、V 都是 rank 4 tensor：axis 0=batch，axis 1=head，axis 2=token position，axis 3=head feature。</p>
+<div class="card"><strong>本课可依赖：</strong>单头 causal attention、两个求和轴、<code>[B,S,H] ↔ [B,N,S,D]</code> split/merge、Linear 与 decoder residual 路径已经通过。<br><strong>必须从零解释：</strong>MHA/MQA/GQA 区别、Q→KV head 映射、projection width、Cache 字节公式，以及 prefill/decode 中真正节省了什么。</div></section>
+
+<section><h2>2. 为什么不只用一个 head</h2>
+<p><strong>MHA</strong> 是 Multi-Head Attention（多头注意力）。它把一次宽向量匹配拆成多个并行的 attention 子空间。每个 head 有自己对应的 projection 参数，因此可学到不同的 Q/K 匹配方式和 V 内容变换。</p>
+<p>先取最小的 <code>H=4、Nq=2、D=2</code>。一个 token 的 normed hidden vector 是 <code>x=[x0,x1,x2,x3]</code>。q_proj 不是简单把 x 原样切两半，而是先用训练参数产生 4 个新数，再 reshape：</p>
+<pre>q_proj(x) = [q00,q01,q10,q11]       # width Nq*D = 2*2 = 4
+reshape → Q head 0 = [q00,q01]
+          Q head 1 = [q10,q11]</pre>
+<p>两个 head 分别执行第 0006 课的 attention，得到两个长度 D 的 context。它们不是平均，而是按 head 顺序拼接，再由 output projection 混合回 H：</p>
+<pre>head_contexts = [[c00,c01], [c10,c11]]
+merge          = [c00,c01,c10,c11]   # width Nq*D
+attention_delta = o_proj(merge)       # width H</pre>
+<p>可以类比为多个并行的“匹配与读取通道”，最后由 <code>o_proj</code> 汇总。类比边界是：不能预先规定某个 head 必然负责语法或指代；head 的功能由训练结果决定。</p></section>
+
+<section><h2>3. MHA、MQA、GQA 是同一条轴上的三个点</h2>
+<table><tr><th>结构</th><th>Q head 数</th><th>K/V head 数</th><th>共享关系</th></tr>
+<tr><td>MHA</td><td><code>Nq</code></td><td><code>Nkv=Nq</code></td><td>每个 Q head 有自己的一对 K/V head</td></tr>
+<tr><td>GQA</td><td><code>Nq</code></td><td><code>1&lt;Nkv&lt;Nq</code></td><td>每组多个 Q head 共享一对 K/V head</td></tr>
+<tr><td>MQA</td><td><code>Nq</code></td><td><code>Nkv=1</code></td><td>所有 Q head 共享唯一一对 K/V head</td></tr></table>
+<p><strong>GQA</strong> 是 Grouped-Query Attention（分组查询注意力）；<strong>MQA</strong> 是 Multi-Query Attention（多查询注意力）。GQA 的合法条件：</p>
+<pre>Nq % Nkv == 0
+group_size = Nq // Nkv</pre>
+<p>若 <code>Nq=4、Nkv=2</code>，每个 KV head 服务 2 个相邻 Q head：</p>
+<pre>Q head:       0   1   2   3
+KV head:     0   0   1   1
+公式: kv_head = q_head // group_size</pre>
+<p>若 <code>Nkv=Nq=4</code>，group_size=1，退化为 MHA。若 <code>Nkv=1</code>，group_size=4，退化为 MQA。</p>
+<div class="warn card"><strong>不要把“共享 K/V”理解为合并或平均 Q：</strong>Q head 仍有 4 个，每个 Q head 都单独产生自己的 scores、weights 和 output；只是 head 0/1 在计算时读取同一份 K0/V0，head 2/3 读取同一份 K1/V1。</div></section>
+
+<section><h2>4. 用 Nq=4、Nkv=2 的数字完整追踪映射</h2>
+<p>令 <code>B=1、S=2、D=1</code>。为了把注意力权重简化成均匀值，所有 Q/K 都设为 0；因此每个 head 的 q0 权重是 <code>[1,0]</code>，q1 权重是 <code>[1/2,1/2]</code>。两组 V 内容不同：</p>
+<pre>KV head 0 的 V: position 0=1,  position 1=3
+KV head 1 的 V: position 0=10, position 1=30
+
+Q head 0 → KV head 0
+Q head 1 → KV head 0
+Q head 2 → KV head 1
+Q head 3 → KV head 1</pre>
+<p>于是每个 Q head 的输出为：</p>
+<pre>position q0: [head0=1, head1=1, head2=10, head3=10]
+position q1: [head0=2, head1=2, head2=20, head3=20]</pre>
+<p>merge 后按 token 排列：</p>
+<pre>merged [B,S,Nq*D] = [[[1,1,10,10],
+                      [2,2,20,20]]]</pre>
+<p>这个例子里，同组 Q head 输出相同是因为我们故意让所有 Q/K 相同。真实模型中，同组 Q head 的 Q projection 不同，所以即使共享 K/V，它们的 scores 和 weights 仍可不同。</p></section>
+
+<section><h2>5. Tensor shape：哪些 head 轴相同，哪些不同</h2>
+<p>取 <code>B=2、S=5、H=16、Nq=4、Nkv=2、D=4</code>：</p>
+<table><tr><th>阶段</th><th>shape</th><th>来源</th></tr>
+<tr><td>hidden_states</td><td><code>[2,5,16]</code></td><td>residual stream</td></tr>
+<tr><td>q_proj raw</td><td><code>[2,5,16]</code></td><td><code>Nq*D=4*4=16</code></td></tr>
+<tr><td>k_proj/v_proj raw</td><td><code>[2,5,8]</code></td><td><code>Nkv*D=2*4=8</code></td></tr>
+<tr><td>Q split</td><td><code>[2,4,5,4]</code></td><td><code>[B,Nq,S,D]</code></td></tr>
+<tr><td>K/V split，Cache 保存形态</td><td><code>[2,2,5,4]</code></td><td><code>[B,Nkv,S,D]</code></td></tr>
+<tr><td>K/V 计算映射后的逻辑形态</td><td><code>[2,4,5,4]</code></td><td>每个 KV head 映射给 group_size=2 个 Q head</td></tr>
+<tr><td>scores/weights</td><td><code>[2,4,5,5]</code></td><td>每个 Q head 都有自己的 q×k 表</td></tr>
+<tr><td>head output</td><td><code>[2,4,5,4]</code></td><td>仍保留 Nq 个输出 head</td></tr>
+<tr><td>merge</td><td><code>[2,5,16]</code></td><td><code>Nq*D=16</code></td></tr>
+<tr><td>o_proj output</td><td><code>[2,5,16]</code></td><td>回到 residual stream 的 H</td></tr></table>
+<p>关键不变量：GQA 只减少 K/V head 轴；Q head 数、attention output head 数和 merge width 仍由 <code>Nq</code> 决定。</p></section>
+
+<section><h2>6. Projection 参数：具体省在哪里</h2>
+<p>沿用 <code>H=16、Nq=4、Nkv=2、D=4</code>，先忽略 bias。PyTorch Linear weight 使用 <code>[out,in]</code>：</p>
+<table><tr><th>层</th><th>构造</th><th>weight shape</th><th>参数数</th></tr>
+<tr><td>q_proj</td><td><code>Linear(H,Nq*D)</code></td><td><code>[16,16]</code></td><td>256</td></tr>
+<tr><td>k_proj</td><td><code>Linear(H,Nkv*D)</code></td><td><code>[8,16]</code></td><td>128</td></tr>
+<tr><td>v_proj</td><td><code>Linear(H,Nkv*D)</code></td><td><code>[8,16]</code></td><td>128</td></tr>
+<tr><td>o_proj</td><td><code>Linear(Nq*D,H)</code></td><td><code>[16,16]</code></td><td>256</td></tr></table>
+<p>对应 MHA 的 Nkv=4 时，k_proj/v_proj 各为 <code>[16,16]</code>、各 256 参数。GQA 降低的是 K/V projection 参数；q_proj 和 o_proj 不因 Nkv 减少。</p>
+<div class="card">不能把一个已经训练好的 MHA checkpoint 随意删掉 K/V heads 就宣称得到等价 GQA。head 数是模型架构和权重 shape 的一部分；原始 GQA 工作讨论了从 MHA checkpoint 转换并继续训练的方法。本课只实现已经按 GQA 结构定义好的推理。</div></section>
+
+<section><h2>7. KV Cache 字节：为什么对 on-device decode 重要</h2>
+<p><strong>KV Cache</strong> 在一次生成请求中，为每一层保存已经处理过的 K 和 V。Q 只服务当前计算，不缓存。暂不考虑 allocator 对齐和元数据，容量公式是：</p>
+<pre>KV bytes = 2 * B * L * Nkv * S_cache * D * bytes_per_element
+           ↑ K和V</pre>
+<p><code>L</code> 是 decoder layer 数；<code>S_cache</code> 是缓存的 token 数。例：<code>B=1、L=32、S_cache=1024、D=128、FP16=2 bytes</code>：</p>
+<pre>MHA: Nkv=32
+2*1*32*32*1024*128*2 = 536,870,912 bytes = 512 MiB
+
+GQA: Nkv=8
+2*1*32*8*1024*128*2  = 134,217,728 bytes = 128 MiB
+
+节省 = 384 MiB；GQA/MHA 比例 = Nkv/Nq = 8/32 = 1/4</pre>
+<p>这里 MiB 是 <code>2^20</code> bytes。Cache 应保存重复前的 <code>[B,Nkv,S,D]</code> K/V。若为了方便计算把 K/V 逻辑映射到 Nq heads，不能把这份展开结果当作 Cache 保存，否则会失去 GQA 的容量优势。</p></section>
+
+<section><h2>8. Prefill 与 decode：省容量不等于所有计算都按比例减少</h2>
+<table><tr><th>阶段</th><th>典型 query/key 长度</th><th>GQA 的主要影响</th></tr>
+<tr><td>full-sequence / prefill</td><td>Q length≈S，K length≈S</td><td>仍有 Nq 份 score 表；naive attention score 计算并不会仅因 Nkv 减少到原来的 Nkv/Nq</td></tr>
+<tr><td>单步 decode</td><td>Q length=1，K length=S_cache</td><td>每步需读取历史 K/V；较少的 Nkv 显著降低 Cache 容量和要读取的数据量</td></tr></table>
+<p>因此 GQA 对 decoder inference 的价值不仅是“显存数字更小”，还包括降低每步从内存读取历史 K/V 的带宽压力。on-device 系统尤其受内存容量、带宽和功耗约束。</p>
+<div class="warn card"><strong>但不要做过度承诺：</strong>端到端速度还受 attention kernel、projection、RoPE、FFN、量化、Cache layout 和硬件影响。仅根据 Nkv 比例不能直接断言整模型快 4 倍；必须在目标 runtime 上测量。</div></section>
+
+<section><h2>9. repeat_kv 是计算映射，不是模型新学出的数据</h2>
+<p>最容易理解的 PyTorch reference 是：</p>
+<pre>group_size = Nq // Nkv
+K_for_compute = K.repeat_interleave(group_size, dim=1)
+V_for_compute = V.repeat_interleave(group_size, dim=1)
+
+# [B,Nq,Sq,D] @ [B,Nq,D,Sk]
+scores = Q @ K_for_compute.transpose(-2,-1) / sqrt(D)
+weights = softmax(masked_scores, dim=-1)
+head_output = weights @ V_for_compute</pre>
+<p><code>repeat_interleave</code> 按连续分组得到 <code>[KV0,KV0,KV1,KV1]</code>，正好对应 Q heads 0..3。它适合教学 reference，但可能实际复制数据。生产 kernel 可以直接按 group 映射或使用支持 GQA 的 fused attention，不必物化完整重复 tensor。</p>
+<p class="small">本课脚本只实现 full-sequence 的方形 causal attention，即 query length 与 key length 相同。decode 时 query length=1、key length=S_cache，还必须带上新 query 在全局序列中的位置偏移来构造 causal 关系；不能直接把方形 mask 的代码原样套用。该状态与 mask 组合在 0010 验收。</p>
+<p>Hugging Face Qwen3 eager reference 使用 <code>expand + reshape</code> 的 <code>repeat_kv</code> 路径；PyTorch <code>scaled_dot_product_attention</code> 也提供 <code>enable_gqa</code>，但其支持范围与 backend 有约束。本课独立代码使用显式 reference，便于看清每个 axis，不把某个 fused backend 是否可用当作数学门禁。</p></section>
+
+<section><h2>10. 与真实 Qwen 风格实现对齐</h2>
+<pre>q_proj: Linear(hidden_size, num_attention_heads * head_dim)
+k_proj: Linear(hidden_size, num_key_value_heads * head_dim)
+v_proj: Linear(hidden_size, num_key_value_heads * head_dim)
+o_proj: Linear(num_attention_heads * head_dim, hidden_size)
+
+num_key_value_groups = num_attention_heads // num_key_value_heads</pre>
+<p>这与本课的 <code>Nq</code>、<code>Nkv</code>、<code>group_size</code> 完全对应。真实 forward 还会在 score 前对 Q/K 应用 RoPE，在 decode 时更新 KV Cache，并可能选择 eager、SDPA 或 FlashAttention backend；这些连接先定位，RoPE 和 Cache 增量执行分别在 0008、0010 验收。</p>
+<p>对后续 export/lowering，必须区分三层事实：模型语义是 Q head 到 KV group 的映射；PyTorch reference 可能显示 repeat/expand；目标 runtime 可能把它融合进 attention kernel。图里出现 repeat 不等于设备一定真的复制了完整 Cache。</p></section>
+
+<section><h2>11. 常见错误与正确性不变量</h2>
+<table><tr><th>错误</th><th>为什么错</th></tr>
+<tr><td>要求 <code>Nkv % Nq == 0</code></td><td>方向反了；必须是 <code>Nq % Nkv == 0</code></td></tr>
+<tr><td>用 <code>q_head % Nkv</code> 映射</td><td>会得到交错映射 0,1,0,1；本课/常见 repeat_kv 是连续分组 0,0,1,1</td></tr>
+<tr><td>把 Q 也减少到 Nkv heads</td><td>那不再是保持 Nq query heads 的 GQA</td></tr>
+<tr><td>head outputs 求平均</td><td>MHA/GQA 通常 concat/merge 后经 o_proj，不是平均</td></tr>
+<tr><td>Cache 保存 expanded K/V</td><td>容量回到 Nq heads，破坏 GQA 的核心推理优势</td></tr>
+<tr><td>认为 GQA score tensor 是 Nkv heads</td><td>每个 Q head 仍有独立 score，因此是 Nq heads</td></tr>
+<tr><td>只测 output shape</td><td>错误的 head 映射仍可能产生相同 shape</td></tr></table>
+<p>应检查：具体 head 映射；MHA/GQA/MQA 三个边界；同组共享 K/V 但各 Q 可有不同 weights；未来 token 不影响过去；merge 顺序；Cache 字节比例。</p></section>
+
+<section><h2>12. 学习闭环</h2>
+<ol><li>运行 <code>exercises/0007_explore_mha_gqa.py</code>，逐行核对 0,0,1,1 映射与精确输出。</li><li>完成 <code>exercises/0007_mha_gqa.py</code> 的 TODO，运行全部测试。</li><li>复盘 <code>reference/0007-mha-gqa-cheatsheet.html</code>，然后关闭资料。</li><li>完成 <code>assessments/0007-mha-gqa.md</code>，填写 <code>submissions/0007.md</code>。</li></ol>
+<p>指定资料：<a href="https://arxiv.org/abs/2305.13245">GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</a> 第 2.2 节；PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html">scaled_dot_product_attention</a> 的 shape 与 GQA constraints；Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a> 中的 <code>repeat_kv</code> 与 attention projection。正文足够完成任务，外链只用于核实和迁移。</p>
+<p><strong>门禁：</strong>独立代码以及闭卷第 1、2、5、6 题为关键项；关键项全部通过且总分至少 80，才完成第 0007 课。</p></section>
+</body></html>

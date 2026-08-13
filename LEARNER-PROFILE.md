@@ -41,7 +41,7 @@
 
 ## 当前最近发展区
 
-第 0006 课已完成，当前暂停。下一最近发展区是 MHA/GQA，但只有学习者明确开始第 0007 课后才生成课程。
+当前进行第 0007 课：在已掌握单头 Attention 和 head split/merge 的基础上，从零建立 MHA/GQA/MQA、`Nq/Nkv` 分组映射、projection width、KV Cache 字节与 prefill/decode 成本边界。
 
 ## 更新规则
 
