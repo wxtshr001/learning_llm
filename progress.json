@@ -4,32 +4,32 @@
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0007R",
-    "title": "GQA tensor stages and explicit head axes",
-    "status": "awaiting_submission",
-    "lesson": "lessons/0007R-gqa-tensor-stages-and-head-axis.html",
-    "guided_exercise": "exercises/0007R_explore_gqa_stages.py",
-    "exercise": "exercises/0007R_gqa_shape_contract.py",
-    "assessment": "assessments/0007R-gqa-tensor-stages-and-head-axis.md",
-    "submission": "submissions/0007R.md",
-    "reference": "reference/0007-mha-gqa-cheatsheet.html"
+    "lesson_id": "0008",
+    "title": "RoPE from 2D rotation to GQA position-aware scores",
+    "status": "in_progress",
+    "lesson": "lessons/0008-rope-from-rotation-to-gqa.html",
+    "guided_exercise": "exercises/0008_explore_rope.py",
+    "exercise": "exercises/0008_rope.py",
+    "assessment": "assessments/0008-rope.md",
+    "submission": "submissions/0008.md",
+    "reference": "reference/0008-rope-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-23: lesson 0007 corrected to 89 after invalidating the under-taught RoPE/Cache path item; 0007R targets only raw/split/logical/merge stages, explicit head axes, and concat semantics",
-  "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006"],
-  "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R"],
-  "next_normal_lesson": "0008",
-  "next_course_generated": false,
+  "current_lesson_revision": "2026-08-23: lesson 0007R passed at 98; lesson 0008 teaches RoPE from exact 2D and Qwen half-split rotations through relative scores, GQA broadcasting, and the explicitly taught Cache boundary",
+  "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006", "0007"],
+  "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R", "0007R"],
+  "next_normal_lesson": "0009",
+  "next_course_generated": true,
   "gate": {
     "minimum_score": 80,
     "score": null,
-    "result": "awaiting_remediation_submission",
-    "critical_items": ["code", "question_1"],
-    "failed_critical_items": ["lesson_0007_question_2"],
-    "previous_attempt": "lesson 0007 corrected to 89; code and questions 1/5/6 passed, question 2 failed, and question 6.4 was invalidated because the complete RoPE/Cache path had not been sufficiently taught"
+    "result": "awaiting_submission",
+    "critical_items": ["code", "question_1", "question_2", "question_3"],
+    "failed_critical_items": [],
+    "previous_adjudication": "lesson 0007R passed at 98; lesson 0008 must teach RoPE before grading its system placement and must not require full Cache implementation"
   },
   "last_verified_evidence": [
-    "submissions/0007-feedback.md",
-    "submissions/0007.md",
-    "learning-records/0011-mha-gqa-partial-remediation-required.md"
+    "submissions/0007R-feedback.md",
+    "submissions/0007R.md",
+    "learning-records/0012-mha-gqa-proven.md"
   ]
 }

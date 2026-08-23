@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>0008：RoPE——从二维旋转到 GQA 位置关系</title>
+<style>body{max-width:1000px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.flow{white-space:pre-wrap}.small{font-size:.93em;color:#42555c}</style></head><body>
+<h1>0008：RoPE——让 Q/K 的匹配感知 token 位置</h1>
+<p><strong>RoPE</strong> 是 Rotary Position Embedding，中文常译“旋转位置编码”。第 0007 课已经证明 GQA 如何生成、映射和合并多个 heads；本课第一次完整讲授 RoPE，而不是把它作为一句式预告。</p>
+
+<section><h2>1. 进入条件、本节成果与系统坐标</h2>
+<p><strong>可以直接使用：</strong>你已经能解释 Q/K/V 分工、score 点积、<code>[B,N,S,D]</code> 的所有 axis、GQA 的 <code>Nq/Nkv</code> 差异，以及 merge/<code>o_proj</code>。</p>
+<p><strong>必须从零解释：</strong>位置为什么需要进入 attention、二维旋转、Qwen 风格的 half-split 配对、<code>position_ids</code>、<code>inv_freq</code>、cos/sin 广播，以及 RoPE 在 full-sequence/prefill/decode 中的位置。</p>
+<pre class="flow">hidden_states [B,S,H]
+→ RMSNorm → q/k/v projections → split heads
+→ Q [B,Nq,S,D] ─┐
+                  ├→ RoPE 只旋转 Q/K → GQA causal attention
+→ K [B,Nkv,S,D] ─┘
+→ V [B,Nkv,S,D] ────────────────────→ value aggregation
+→ head outputs → merge → o_proj → residual add</pre>
+<p><code>B</code> 是 batch size；<code>S</code> 是 token 数；<code>H</code> 是 hidden size；<code>Nq</code> 是 Q head 数；<code>Nkv</code> 是 K/V head 数；<code>D</code> 是每个 head 的特征数。</p>
+<div class="card"><strong>本节成果：</strong>实现 Qwen 风格 RoPE，使 Q/K shape 和向量长度保持不变，并用具体点积说明相同相对距离产生相同位置效应。</div></section>
+
+<section><h2>2. 为什么 attention 需要位置信息</h2>
+<p>第 0006 课的 score 是 <code>Q[q]·K[k]</code>。如果两个 token 的内容向量完全相同，而计算里没有任何位置输入，那么“第 1 个 token”和“第 10 个 token”对点积来说没有区别。</p>
+<p>RoPE 不把一个 position vector 直接加到 hidden state；它根据 token 的 position，把 Q 和 K 的二维特征对旋转不同角度。于是 score 同时取决于内容方向和两个 token 的相对位置。</p>
+<div class="warn card">RoPE 不是 causal mask。RoPE 让 score 感知距离；causal mask 仍负责禁止看未来。两者职责不同，不能互相替代。</div></section>
+
+<section><h2>3. 先只看二维：旋转到底做了什么</h2>
+<p>一个二维向量 <code>x=[a,b]</code> 逆时针旋转角度 <code>θ</code> 后：</p>
+<pre>x_rot[0] = a*cos(θ) - b*sin(θ)
+x_rot[1] = a*sin(θ) + b*cos(θ)</pre>
+<p>例如 <code>x=[3,4]</code>，旋转 90° 时 <code>cos=0、sin=1</code>：</p>
+<pre>x_rot = [3*0 - 4*1, 3*1 + 4*0] = [-4,3]
+
+旋转前长度 = sqrt(3²+4²) = 5
+旋转后长度 = sqrt((-4)²+3²) = 5</pre>
+<p>旋转改变方向，不改变长度。这是后面检查实现正确性的一个不变量。</p></section>
+
+<section><h2>4. Qwen 的 D=4 配对不是相邻元素</h2>
+<p>原始论文常用相邻配对 <code>(x0,x1)、(x2,x3)</code> 展示旋转。当前 Hugging Face Qwen 风格实现采用 <strong>half-split layout</strong>：先把最后一维分成前后两半，所以 <code>D=4</code> 时配对是 <code>(x0,x2)、(x1,x3)</code>。</p>
+<pre>x = [x0,x1,x2,x3]
+first_half  = [x0,x1]
+second_half = [x2,x3]
+
+rotate_half(x) = [-x2,-x3,x0,x1]</pre>
+<p>取 <code>x=[1,2,3,4]</code>：</p>
+<pre>rotate_half(x) = [-3,-4,1,2]</pre>
+<p>假设第一对 <code>(x0,x2)</code> 旋转 90°，第二对 <code>(x1,x3)</code> 旋转 0°，则：</p>
+<pre>cos = [0,1,0,1]
+sin = [1,0,1,0]
+
+x_rope = x*cos + rotate_half(x)*sin
+       = [1,2,3,4]*[0,1,0,1] + [-3,-4,1,2]*[1,0,1,0]
+       = [-3,2,1,4]</pre>
+<p>第一对从 <code>[1,3]</code> 变成 <code>[-3,1]</code>；第二对 <code>[2,4]</code> 不变。不要把 half-split 的 <code>rotate_half</code> 错写成相邻元素交换。</p></section>
+
+<section><h2>5. position_ids 怎样变成 cos/sin</h2>
+<p><code>position_ids</code> 是每个 token 的整数位置，shape 为 <code>[B,S]</code>。例如一条长度 3 的序列是 <code>[[0,1,2]]</code>。</p>
+<p>RoPE 给每个二维特征对一个不同的旋转频率。设 pair index 为 <code>i</code>，范围是 <code>0..D/2-1</code>：</p>
+<pre>inv_freq[i] = 1 / base^(2*i/D)
+angle[b,s,i] = position_ids[b,s] * inv_freq[i]</pre>
+<p><code>base</code> 是频率基数，标准示例常取 10000。<code>inv_freq</code> shape 是 <code>[D/2]</code>；angle shape 是 <code>[B,S,D/2]</code>。Qwen half-split 需要把 angles 复制一次：</p>
+<pre>angles [B,S,D/2]
+→ concat(angles, angles) = embedding [B,S,D]
+→ cos = cos(embedding), sin = sin(embedding)</pre>
+<p>position 0 的 angle 全为 0，所以 <code>cos=1、sin=0</code>，RoPE 是恒等变换。position 越大，同一频率对应的旋转角越大。</p>
+<p class="small">本课只学习默认 RoPE。linear、dynamic、YaRN、LongRoPE 等长上下文缩放变体暂不进入门禁。</p></section>
+
+<section><h2>6. GQA 中 cos/sin 怎样广播</h2>
+<p>取 <code>B=2、S=5、Nq=6、Nkv=2、D=4</code>：</p>
+<table><tr><th>tensor</th><th>rank/shape</th><th>axis 含义</th></tr>
+<tr><td>position_ids</td><td>rank 2，<code>[2,5]</code></td><td>batch、token position</td></tr>
+<tr><td>cos/sin</td><td>rank 3，<code>[2,5,4]</code></td><td>batch、token position、head feature</td></tr>
+<tr><td>unsqueeze 后 cos/sin</td><td>rank 4，<code>[2,1,5,4]</code></td><td>head axis 长度 1，可广播</td></tr>
+<tr><td>Q</td><td>rank 4，<code>[2,6,5,4]</code></td><td><code>[B,Nq,S,D]</code></td></tr>
+<tr><td>K</td><td>rank 4，<code>[2,2,5,4]</code></td><td><code>[B,Nkv,S,D]</code></td></tr>
+<tr><td>Q_rope</td><td><code>[2,6,5,4]</code></td><td>shape 与 Q 相同</td></tr>
+<tr><td>K_rope</td><td><code>[2,2,5,4]</code></td><td>shape 与 K 相同</td></tr>
+<tr><td>V</td><td><code>[2,2,5,4]</code></td><td>不经过 RoPE</td></tr></table>
+<p><code>[B,1,S,D]</code> 的 head axis 会分别广播到 6 个 Q heads 和 2 个 K heads，所以 Q/K head 数不同不妨碍使用同一组 position cos/sin。K 在仍为 <code>Nkv</code> 时旋转，不需要先 repeat 到 <code>Nq</code>。</p></section>
+
+<section><h2>7. 为什么它表达相对位置</h2>
+<p>设二维旋转矩阵为 <code>R(position*θ)</code>。Q 在位置 <code>m</code>，K 在位置 <code>n</code>：</p>
+<pre>score_position_part
+= (R(mθ) q) · (R(nθ) k)
+= q · R((n-m)θ) k</pre>
+<p>最终只留下相对位置 <code>n-m</code>。用每步旋转 90° 的最小例子：</p>
+<pre>原始 q=k=[1,0]
+position 0 → [ 1,0]
+position 1 → [ 0,1]
+position 2 → [-1,0]
+
+score(0,1) = [1,0]·[0,1]  = 0
+score(1,2) = [0,1]·[-1,0] = 0   # 相对距离同为 1
+score(0,2) = [1,0]·[-1,0] = -1  # 相对距离为 2</pre>
+<p>这不是说真实模型的所有 score 只由距离决定；Q/K 的内容也参与。这里证明的是 position 的影响以相对差进入点积。</p></section>
+
+<section><h2>8. 为什么旋转 Q/K，不旋转 V</h2>
+<p>Q/K 决定“当前 query 应该从哪些 key positions 取信息”，因此位置要进入它们的匹配 score。V 是被权重汇集的内容载体：</p>
+<pre>Q_rope @ K_ropeᵀ → scores → mask → softmax → weights
+weights @ V → head_output</pre>
+<p>如果把 V 也旋转，就会直接改变被汇集的内容表示；这不是本课和 Qwen 实现采用的 RoPE 语义。代码接口因此返回旋转后的 Q/K，V 原样沿后续路径使用。</p></section>
+
+<section><h2>9. full-sequence、prefill、decode 与 Cache 的边界</h2>
+<table><tr><th>阶段</th><th>position_ids</th><th>RoPE 行为</th></tr>
+<tr><td>full-sequence/prefill</td><td>通常为 <code>0..S-1</code></td><td>一次为全部 Q/K positions 构造 cos/sin 并旋转</td></tr>
+<tr><td>单步 decode</td><td>新 token 使用其绝对位置，如已有 5 个 token 时新位置为 5</td><td>只旋转新 Q/K；不能每步都把位置重置为 0</td></tr></table>
+<p>当前 Qwen 风格顺序是：split 后得到 Q/K/V → 对 Q/K 应用 RoPE → 若启用 Cache，追加旋转后的 K 和未旋转的 V → attention。0010 才会实现 Cache 的增量更新与 full-vs-decode parity；0008 只验收 RoPE 本身和这个明确位置。</p></section>
+
+<section><h2>10. PyTorch 实现逐行对应</h2>
+<pre>def rotate_half(x):
+    half = x.shape[-1] // 2
+    x1 = x[..., :half]
+    x2 = x[..., half:]
+    return torch.cat((-x2, x1), dim=-1)
+
+cos = cos.unsqueeze(1)  # [B,S,D] → [B,1,S,D]
+sin = sin.unsqueeze(1)
+q_rope = q * cos + rotate_half(q) * sin
+k_rope = k * cos + rotate_half(k) * sin</pre>
+<p><code>...</code> 表示保留前面所有 axis，只切最后一个 axis。<code>unsqueeze(1)</code> 在 axis 1 插入长度 1 的 head 维。逐元素写法是：</p>
+<pre>q_rope[b,n,s,d]
+= q[b,n,s,d] * cos[b,s,d]
+  + rotate_half(q)[b,n,s,d] * sin[b,s,d]</pre>
+<p>必须检查：D 为正偶数；Q/K 的 B、S、D 相同；cos/sin 是 <code>[B,S,D]</code>；device/dtype 相容。RoPE 不改变任何 tensor 的元素总数或 shape。</p></section>
+
+<section><h2>11. Parameter、Activation 与 State</h2>
+<table><tr><th>对象</th><th>类别</th><th>说明</th></tr>
+<tr><td>q/k projection weights</td><td>Parameter</td><td>训练学习并保存在 checkpoint</td></tr>
+<tr><td>position_ids、cos、sin、Q_rope、K_rope</td><td>Activation/运行输入</td><td>本次请求根据位置计算；默认 RoPE 没有为每个位置学习一张 Parameter 表</td></tr>
+<tr><td>inv_freq</td><td>确定性配置/常见 buffer</td><td>由 base 与 D 计算；实现中可缓存，但不是普通可训练 Parameter</td></tr>
+<tr><td>旋转后的历史 K 与 V</td><td>请求 State</td><td>decode Cache，0010 实现生命周期</td></tr></table>
+<p>对 export/runtime，RoPE 可能表现为 arange、乘法、cos、sin、slice、neg、cat 和逐元素运算，也可能被后端融合。无论图如何变化，Q/K shape、不旋转 V、position 0 恒等和长度保持是可用于对齐的不变量。</p></section>
+
+<section><h2>12. 学习闭环</h2>
+<ol><li>运行 <code>exercises/0008_explore_rope.py</code>，核对 exact rotation、相对距离和 GQA broadcast。</li><li>完成 <code>exercises/0008_rope.py</code> 中的 TODO 并运行全部测试。</li><li>查看 <code>reference/0008-rope-cheatsheet.html</code>，然后关闭资料。</li><li>完成 <code>assessments/0008-rope.md</code>，填写 <code>submissions/0008.md</code>。</li><li>任何符号或步骤看不懂时，先向 Agent 提问，不要靠猜测完成门禁。</li></ol>
+<p>指定资料：<a href="https://arxiv.org/abs/2104.09864">RoFormer 原论文</a> 第 3.1、3.2 和 3.4.2 节；Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/docs/source/en/internal/rope_utils.md">Rotary embeddings utilities</a> 的 Overview；<a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a> 中 <code>rotate_half</code>、<code>apply_rotary_pos_emb</code> 和 Attention forward。正文足够完成作业，外链只用于核实。</p>
+<p><strong>门禁：</strong>独立代码以及闭卷第 1、2、3 题为关键项；全部通过且总分至少 80，才进入 Tiny Decoder Layer。</p></section>
+</body></html>

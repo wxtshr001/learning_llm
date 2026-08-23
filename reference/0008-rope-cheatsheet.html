@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0008 RoPE 速查</title><style>body{max-width:900px;margin:auto;padding:30px;font:16px/1.65 sans-serif;color:#17232a}section{border-top:1px solid #ccd6d2;padding:18px 0}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef;padding:.1em .3em}table{border-collapse:collapse;width:100%}th,td{padding:.55em;border-bottom:1px solid #ddd;text-align:left}</style></head><body>
+<h1>RoPE 速查：Qwen Half-split Layout</h1>
+<section><h2>系统位置</h2><pre>q/k/v projections → split [B,N,S,D]
+→ RoPE(Q,K only) → Cache rotated K + original V
+→ GQA attention → merge → o_proj</pre></section>
+<section><h2>half-split rotation</h2><pre>x = [x0,x1,x2,x3]
+rotate_half(x) = [-x2,-x3,x0,x1]
+x_rope = x*cos + rotate_half(x)*sin</pre><p>D 必须为正偶数；配对为 <code>(0,D/2)、(1,D/2+1)...</code>。</p></section>
+<section><h2>cos/sin</h2><pre>position_ids: [B,S]
+inv_freq: [D/2]
+angles = position_ids[...,None] * inv_freq  # [B,S,D/2]
+embedding = cat(angles,angles)               # [B,S,D]
+cos/sin = embedding.cos()/sin()</pre></section>
+<section><h2>GQA broadcast</h2><pre>cos/sin [B,S,D] → unsqueeze(1) → [B,1,S,D]
+Q [B,Nq,S,D]   → Q_rope same shape
+K [B,Nkv,S,D]  → K_rope same shape
+V [B,Nkv,S,D]  → unchanged</pre></section>
+<section><h2>不变量</h2><ul><li>position 0：cos=1、sin=0，输出等于输入。</li><li>旋转保持每个 head vector 的长度。</li><li>相同相对位置差产生相同的位置旋转差。</li><li>RoPE 不替代 causal mask。</li></ul></section>
+<p><a href="../lessons/0008-rope-from-rotation-to-gqa.html">返回课程</a></p></body></html>

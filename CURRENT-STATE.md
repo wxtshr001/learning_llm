@@ -4,7 +4,7 @@
 
 ## 当前门禁
 
-**第 0007 课异议复核后为 89/100；关键题 2 未通过，关键题 6 已更正为通过，当前进入只补 shape/axis 的 0007R。**
+**0007R 98/100，通过；第 0007 课正式完成。当前第 0008 课 RoPE 已开始，等待学习者提交。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -26,6 +26,7 @@
 - 第 0006 课首次提交 87/100；手算、shape、causal 行为、scale 与 PyTorch 主计算通过。
 - 0006R 95/100：两个求和轴、完整 decoder block 路径与代码 contract 通过，第 0006 课正式完成。
 - 第 0007 课异议复核后 89/100：head 映射、逐 head 数值、GQA 代码、KV Cache 主计算、decode 带宽意义与题面内 inference 迁移已证明；只剩 raw/split/merge tensor 阶段待补强。
+- 0007R 98/100：raw/split/logical/merge、显式 head axis 与 concat/average 门禁通过，第 0007 课正式完成。
 
 ## 第 0006 课最终能力状态
 
@@ -41,6 +42,23 @@
 - merge 与 `o_proj` 是 rank-3 tensor，没有显式 head axis；`Nq*D` 只是扁平后的特征宽度。
 - concat/merge 保留各 head 特征供 `o_proj` 学习组合；平均会不可逆丢失 head 身份和宽度。
 - 原 Q6.4 要求完整 GQA+RoPE+Cache 路径，但课程只做了一句话预告，教学覆盖不足；该小题已撤销，不扣分、不作门禁。完整路径与 RoPE 不进入 0007R。
+
+## 第 0007 课最终能力状态
+
+- 已证明 MHA/GQA/MQA 边界、连续 Q→KV 分组、projection width 和逐 head attention 数值。
+- 已证明 q/k/v raw、split、logical K/V、scores/weights、head output、merge 与 `o_proj` 的 rank/axis。
+- 已证明 merge 后没有显式 head axis，以及 concat 不能替换为 average。
+- 已证明 Cache 保存未展开的 `Nkv` heads、容量公式与 decode 带宽意义。
+- 0007R 把 `(1,6,12)` 称作“2D 矩阵”是局部术语笔误；完整 shape 和 axis 结论正确。
+
+## 第 0008 课范围
+
+- 从二维向量旋转开始解释 RoPE，不依赖此前一句式预告。
+- 实现 Qwen/Hugging Face half-split `rotate_half`，明确 D=4 时配对为 `(0,2)`、`(1,3)`。
+- 从 `position_ids [B,S]` 构造 `inv_freq [D/2]`、angles、cos/sin `[B,S,D]`。
+- 通过 `[B,1,S,D]` 广播同时旋转 `Q [B,Nq,S,D]` 与 `K [B,Nkv,S,D]`，V 不旋转。
+- 用手算点积证明相同相对位置差产生相同位置效应，并区分 RoPE 与 causal mask。
+- 明确 full-sequence/prefill/decode 的 position_ids 以及旋转后 K 在 Cache 路径中的位置；不提前实现完整 Cache。
 
 ## 课程设计修订
 
@@ -60,20 +78,21 @@
 
 ## 学习者下一步
 
-1. 阅读 `lessons/0007R-gqa-tensor-stages-and-head-axis.html`。
-2. 运行 `exercises/0007R_explore_gqa_stages.py`，核对 raw/split/logical/merge 的 rank 与 axis。
-3. 完成 `exercises/0007R_gqa_shape_contract.py` 的 TODO 并运行测试。
-4. 闭卷完成 `assessments/0007R-gqa-tensor-stages-and-head-axis.md`，填写 `submissions/0007R.md`。
+1. 阅读 `lessons/0008-rope-from-rotation-to-gqa.html`。
+2. 运行 `exercises/0008_explore_rope.py`，核对 exact rotation、相对位置 score 和 GQA broadcast。
+3. 完成 `exercises/0008_rope.py` 的 TODO 并运行测试。
+4. 查看 `reference/0008-rope-cheatsheet.html` 后关闭资料。
+5. 闭卷完成 `assessments/0008-rope.md`，填写 `submissions/0008.md`。
 
 ## Agent 下一步
 
-- 收到 0007R 前不生成 0008。
-- 0007R 独立脚本与闭卷第 1 题通过，且总分至少 80，才正式完成第 0007 课并进入 RoPE。
+- 收到 0008 前不生成 0009。
+- 0008 独立代码与闭卷第 1、2、3 题通过，且总分至少 80，才进入 Tiny Decoder Layer。
 
 ## 最近证据
 
-- `submissions/0007-feedback.md`
-- `submissions/0007.md`
-- `learning-records/0011-mha-gqa-partial-remediation-required.md`
+- `submissions/0007R-feedback.md`
+- `submissions/0007R.md`
+- `learning-records/0012-mha-gqa-proven.md`
 
 环境配置见 `ENVIRONMENT.md`。硬件信息只代表记录时主机，另一平台必须运行 `exercises/0000_verify_pytorch.py` 自行验证。

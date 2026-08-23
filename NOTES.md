@@ -1,5 +1,6 @@
 # Teaching Notes
 
+- 2026-08-23：0007R 98/100 通过，第 0007 课正式完成。raw/split/logical/merge、显式 head axis 与 concat/average 已证明；把 `(1,6,12)` 称作 2D 仅为局部术语笔误。开始 0008 RoPE，必须完整讲授二维旋转、Qwen half-split、position cos/sin、相对点积与 GQA 广播后再验收。
 - 2026-08-23：学习者有效反对 0007 Q6.4。虽然课程末尾一句话和速查表出现过 RoPE/Cache 位置，但没有按当前知识水平充分讲授，不能据此设置完整系统路径关键门禁。成绩由 85 更正为 89；Q6.4 撤销；0007R 移除完整路径，只补 shape/axis。
 - 2026-08-23：第 0007 课初次裁决曾为 85/100，随后被上方异议复核记录 supersede；不得再按旧裁决复测 Q6.4。
 - 2026-08-14：开始 0007 MHA/GQA。课程按最终 on-device decode 目标反向组织：具体 head 映射 → shape/projection → Cache 字节 → prefill/decode 带宽边界 → Qwen 风格源码映射；强调 repeat 是计算映射、Cache 仍保存 Nkv heads，避免孤立讲概念。

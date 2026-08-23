@@ -14,7 +14,30 @@ def gqa_stage_shapes(
     """Return the semantic shape at every named GQA stage."""
     # TODO 1: reject non-positive inputs, Nq % Nkv != 0, and H != Nq*D.
     # TODO 2: return the shapes named in run_tests().
-    raise NotImplementedError
+    if batch <= 0 or sequence <= 0 or hidden <= 0 or num_query_heads <= 0 or num_kv_heads <= 0 or head_dim <= 0:
+        raise ValueError("invalid inputs")
+    if num_query_heads % num_kv_heads != 0:
+        raise ValueError("invalid match")
+    if hidden != num_query_heads * head_dim:
+        raise ValueError("invalid size")
+
+    ret = {
+        "hidden": (batch, sequence, hidden),
+        "q_raw": (batch, sequence, num_query_heads * head_dim),
+        "k_raw": (batch, sequence, num_kv_heads * head_dim),
+        "v_raw": (batch, sequence, num_kv_heads * head_dim),
+        "q_split": (batch, num_query_heads, sequence, head_dim),
+        "k_split": (batch, num_kv_heads, sequence, head_dim),
+        "v_split": (batch, num_kv_heads, sequence, head_dim),
+        "logical_k": (batch, num_query_heads, sequence, head_dim),
+        "logical_v": (batch, num_query_heads, sequence, head_dim),
+        "scores": (batch, num_query_heads, sequence, sequence),
+        "weights": (batch, num_query_heads, sequence, sequence),
+        "head_output": (batch, num_query_heads, sequence, head_dim),
+        "merge": (batch, sequence, num_query_heads * head_dim),
+        "o_output": (batch, sequence, num_query_heads * head_dim),
+    }
+    return ret
 
 
 def run_tests() -> None:

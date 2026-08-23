@@ -36,6 +36,10 @@
   第 0006 课用于在 softmax 前把未来 key score 设为负无穷。
 - [GQA: Training Generalized Multi-Query Transformer Models](https://arxiv.org/abs/2305.13245)
   GQA 原始论文。用于理解 query heads 与 KV heads 的折中及 Cache 收益；不学习 uptraining 实验细节。
+- [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864)
+  RoPE 原始论文。第 0008 课只读 3.1、3.2 和 3.4.2，用于核对二维旋转、相对位置点积与高效实现；训练实验和长距离衰减证明暂缓。
+- [Hugging Face Rotary Embeddings Utilities](https://github.com/huggingface/transformers/blob/main/docs/source/en/internal/rope_utils.md)
+  官方 Transformers RoPE 概览。第 0008 课只学习 default RoPE；linear、dynamic、YaRN、LongRoPE 等 scaling 变体暂不进入门禁。
 - [Hugging Face Transformers: Caching](https://huggingface.co/docs/transformers/main/cache_explanation)
   KV Cache 的官方解释与当前 cache API。用于实现 prefill/decode parity 和理解标准 cache shape。
 - [PyTorch `torch.export` API](https://docs.pytorch.org/docs/stable/user_guide/torch_compiler/export/api_reference.html)
