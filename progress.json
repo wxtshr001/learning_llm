@@ -14,7 +14,7 @@
     "submission": "submissions/0008.md",
     "reference": "reference/0008-rope-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-23: lesson 0007R passed at 98; lesson 0008 teaches RoPE from exact 2D and Qwen half-split rotations through relative scores, GQA broadcasting, and the explicitly taught Cache boundary",
+  "current_lesson_revision": "2026-08-23: lesson 0008 rewritten after abstraction-level feedback; it now teaches angle/radian/cos/sin basics, exact per-axis half-split arithmetic, simplified position frequencies, one-token Q/K traces, GQA broadcasting, and only then symbolic formulas and code",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006", "0007"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R", "0007R"],
   "next_normal_lesson": "0009",

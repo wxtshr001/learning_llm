@@ -1,11 +1,18 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0008 RoPE 速查</title><style>body{max-width:900px;margin:auto;padding:30px;font:16px/1.65 sans-serif;color:#17232a}section{border-top:1px solid #ccd6d2;padding:18px 0}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef;padding:.1em .3em}table{border-collapse:collapse;width:100%}th,td{padding:.55em;border-bottom:1px solid #ddd;text-align:left}</style></head><body>
 <h1>RoPE 速查：Qwen Half-split Layout</h1>
+<section><h2>一句话</h2><p>position 决定旋转角；RoPE 按该角度旋转 Q/K 的二维特征对，让 Q·K score 感受到相对位置。V 不旋转，causal mask 仍单独负责禁止看未来。</p></section>
+<section><h2>四个易算角度</h2><table><tr><th>角度</th><th>弧度</th><th>cos</th><th>sin</th></tr><tr><td>0°</td><td>0</td><td>1</td><td>0</td></tr><tr><td>90°</td><td>π/2</td><td>0</td><td>1</td></tr><tr><td>180°</td><td>π</td><td>-1</td><td>0</td></tr><tr><td>270°</td><td>3π/2</td><td>0</td><td>-1</td></tr></table></section>
 <section><h2>系统位置</h2><pre>q/k/v projections → split [B,N,S,D]
 → RoPE(Q,K only) → Cache rotated K + original V
 → GQA attention → merge → o_proj</pre></section>
 <section><h2>half-split rotation</h2><pre>x = [x0,x1,x2,x3]
 rotate_half(x) = [-x2,-x3,x0,x1]
 x_rope = x*cos + rotate_half(x)*sin</pre><p>D 必须为正偶数；配对为 <code>(0,D/2)、(1,D/2+1)...</code>。</p></section>
+<section><h2>D=4 手算锚点</h2><pre>x = [1,2,3,4]
+rotate_half(x) = [-3,-4,1,2]
+cos = [0,1,0,1]
+sin = [1,0,1,0]
+x_rope = [-3,2,1,4]</pre><p>pair 0 <code>(axis0,axis2)</code> 转 90°；pair 1 <code>(axis1,axis3)</code> 转 0°。</p></section>
 <section><h2>cos/sin</h2><pre>position_ids: [B,S]
 inv_freq: [D/2]
 angles = position_ids[...,None] * inv_freq  # [B,S,D/2]

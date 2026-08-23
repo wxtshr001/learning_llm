@@ -69,19 +69,29 @@ def main() -> None:
     key = torch.arange(1, 1 + batch * 2 * sequence * head_dim, dtype=torch.float32)
     key = key.reshape(batch, 2, sequence, head_dim)
     position_ids = torch.arange(sequence).unsqueeze(0)
-    angles = position_ids[..., None].float() * torch.tensor([1.0, 0.5])
+    # Teaching-only easy frequencies: pair 0 turns 90 degrees per token;
+    # pair 1 stays at 0 degrees. The independent assignment builds real defaults.
+    pair_radians_per_token = torch.tensor([math.pi / 2, 0.0])
+    angles = position_ids[..., None].float() * pair_radians_per_token
     embedding = torch.cat((angles, angles), dim=-1)
     q_rope, k_rope = apply_rope(query, key, embedding.cos(), embedding.sin())
     print("position_ids [B,S]:", tuple(position_ids.shape), position_ids.tolist())
+    print("pair radians per token [D/2]:", pair_radians_per_token.tolist())
+    print("angles in degrees [B,S,D/2]:", torch.rad2deg(angles).tolist())
+    print("cos by position:", embedding.cos().round(decimals=4).tolist())
+    print("sin by position:", embedding.sin().round(decimals=4).tolist())
     print("cos/sin [B,S,D]:", tuple(embedding.shape))
     print("after unsqueeze [B,1,S,D]:", (batch, 1, sequence, head_dim))
     print("Q/Q_rope [B,Nq,S,D]:", tuple(query.shape), tuple(q_rope.shape))
     print("K/K_rope [B,Nkv,S,D]:", tuple(key.shape), tuple(k_rope.shape))
     print("position 0 is identity:", torch.equal(q_rope[:, :, 0], query[:, :, 0]))
+    print("Q head 0, position 1 before:", query[0, 0, 1].tolist())
+    print("Q head 0, position 1 after:", q_rope[0, 0, 1].round(decimals=4).tolist())
     assert q_rope.shape == query.shape
     assert k_rope.shape == key.shape
     torch.testing.assert_close(q_rope[:, :, 0], query[:, :, 0])
     torch.testing.assert_close(k_rope[:, :, 0], key[:, :, 0])
+    torch.testing.assert_close(q_rope[0, 0, 1], torch.tensor([-7.0, 6.0, 5.0, 8.0]))
     torch.testing.assert_close(
         torch.linalg.vector_norm(q_rope, dim=-1),
         torch.linalg.vector_norm(query, dim=-1),

@@ -1,137 +1,353 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>0008：RoPE——从二维旋转到 GQA 位置关系</title>
-<style>body{max-width:1000px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.flow{white-space:pre-wrap}.small{font-size:.93em;color:#42555c}</style></head><body>
-<h1>0008：RoPE——让 Q/K 的匹配感知 token 位置</h1>
-<p><strong>RoPE</strong> 是 Rotary Position Embedding，中文常译“旋转位置编码”。第 0007 课已经证明 GQA 如何生成、映射和合并多个 heads；本课第一次完整讲授 RoPE，而不是把它作为一句式预告。</p>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>0008：RoPE 通俗详解——把位置变成 Q/K 的旋转角</title>
+<style>
+body{max-width:1040px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.78 Georgia,"Noto Serif SC",serif}
+section{border-top:1px solid #d7ddd8;padding:26px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}
+table{border-collapse:collapse;width:100%}th,td{padding:.7em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.flow{white-space:pre-wrap}.small{font-size:.93em;color:#42555c}.clock{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.clock div{background:#edf7f4;padding:12px;text-align:center;border-radius:8px}.step{counter-increment:step}.step h3:before{content:counter(step) ". ";color:#176b70}.steps{counter-reset:step}.formula{font-size:1.05em}.ok{color:#176b70;font-weight:bold}
+@media(max-width:700px){.clock{grid-template-columns:1fr 1fr}body{padding:18px}table{font-size:.92em}}
+</style>
+</head>
+<body>
+<h1>0008：RoPE 通俗详解——把 token 位置变成 Q/K 的旋转角</h1>
+<p>先不要管论文公式。RoPE 做的事情可以先压缩成一句人话：</p>
+<div class="card"><strong>同一个 Q 或 K 向量，token 所在位置不同，就把它朝不同方向旋转；Attention 比较 Q 和 K 时，既比较内容，也感受到两个 token 相隔多远。</strong></div>
+<p><strong>RoPE</strong> 全称 Rotary Position Embedding，中文常译“旋转位置编码”。本课会从钟表指针和二维坐标开始，把每一个数字算清楚，再接到 Qwen 的 GQA 和 PyTorch。</p>
 
-<section><h2>1. 进入条件、本节成果与系统坐标</h2>
-<p><strong>可以直接使用：</strong>你已经能解释 Q/K/V 分工、score 点积、<code>[B,N,S,D]</code> 的所有 axis、GQA 的 <code>Nq/Nkv</code> 差异，以及 merge/<code>o_proj</code>。</p>
-<p><strong>必须从零解释：</strong>位置为什么需要进入 attention、二维旋转、Qwen 风格的 half-split 配对、<code>position_ids</code>、<code>inv_freq</code>、cos/sin 广播，以及 RoPE 在 full-sequence/prefill/decode 中的位置。</p>
+<section><h2>0. 这次可以依赖什么，不能假设什么</h2>
+<p><strong>已经掌握，可以直接使用：</strong></p>
+<ul><li>Q 用来发起查询，K 用来匹配，V 是最终被取回的内容。</li><li>GQA 中 Q 是 <code>[B,Nq,S,D]</code>，K/V 是 <code>[B,Nkv,S,D]</code>。</li><li>score 来自 Q 与 K 的点积；V 不参与 score。</li><li>会追踪 reshape、transpose、broadcast 和每个 axis。</li></ul>
+<p><strong>本课从零讲，不假设你会：</strong></p>
+<ul><li>角度、弧度、cos、sin 在旋转中分别做什么。</li><li>为什么 D 个特征要两两配对。</li><li>Qwen 的 <code>rotate_half</code> 为什么得到 <code>[-x2,-x3,x0,x1]</code>。</li><li><code>position_ids</code> 怎样一步步变成 cos/sin。</li><li>为什么最终的 Q·K 点积能感受到相对位置。</li></ul>
+<p><strong>完成本课后：</strong>你能手算一个 D=4 向量的 Qwen-style RoPE，能实现代码，并能指出它在 GQA/Cache 路径中的准确位置。</p></section>
+
+<section><h2>1. 先建立最小直觉：钟表指针就是二维向量</h2>
+<p>把二维向量 <code>[x,y]</code> 想成一根从原点出发的箭头。为了手算方便，本课采用数学坐标：x 轴向右，y 轴向上，正角度表示逆时针旋转。</p>
+<div class="clock">
+<div><strong>0°</strong><br>向右<br><code>[1,0]</code></div>
+<div><strong>90°</strong><br>向上<br><code>[0,1]</code></div>
+<div><strong>180°</strong><br>向左<br><code>[-1,0]</code></div>
+<div><strong>270°</strong><br>向下<br><code>[0,-1]</code></div>
+</div>
+<p>所以 <code>[1,0]</code> 旋转 90° 变成 <code>[0,1]</code>；再旋转 90° 变成 <code>[-1,0]</code>。这就是本课所有高维公式的最小核心。</p>
+<h3>角度和弧度</h3>
+<p>手算时我们说 90°，代码中的 <code>torch.sin()</code>/<code>torch.cos()</code> 使用<strong>弧度</strong>：</p>
+<table><tr><th>角度</th><th>弧度</th><th>cos</th><th>sin</th></tr>
+<tr><td>0°</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><td>90°</td><td>π/2</td><td>0</td><td>1</td></tr>
+<tr><td>180°</td><td>π</td><td>-1</td><td>0</td></tr>
+<tr><td>270°</td><td>3π/2</td><td>0</td><td>-1</td></tr></table>
+<p>π（读作 pi）约等于 3.14159。你不需要在闭卷题里计算任意角度的三角函数；题目会给出可手算的 cos/sin。</p></section>
+
+<section><h2>2. cos 和 sin 为什么能完成旋转</h2>
+<p>一个二维向量 <code>[a,b]</code> 旋转角度 θ 后：</p>
+<pre class="formula">新 x = a*cos(θ) - b*sin(θ)
+新 y = a*sin(θ) + b*cos(θ)</pre>
+<p>先不要背。代入 90° 的 <code>cos=0、sin=1</code>：</p>
+<pre>新 x = a*0 - b*1 = -b
+新 y = a*1 + b*0 =  a
+
+所以 [a,b] 旋转 90° → [-b,a]</pre>
+<p>拿具体数字 <code>[3,4]</code>：</p>
+<pre>[3,4] 旋转 90° → [-4,3]</pre>
+<p>用坐标画面理解：原来向右 3、向上 4；旋转后向左 4、向上 3。</p>
+<h3>旋转不会改变箭头长度</h3>
+<pre>旋转前长度 = sqrt(3² + 4²) = 5
+旋转后长度 = sqrt((-4)² + 3²) = 5</pre>
+<p>因此“每个 head vector 的长度保持不变”可以成为代码测试。若旋转后长度明显变化，通常是配对、cos/sin 排列或符号写错。</p></section>
+
+<section><h2>3. 从 D=2 走到 D=4：不是四维一起转，而是两个二维平面</h2>
+<p><code>D</code> 是 head dimension，即每个 Attention head 拥有的特征数。若 <code>D=4</code>，RoPE 会把 4 个数分成两个二维向量，分别旋转。</p>
+<p>关键问题变成：哪两个 axis 配成一对？</p>
+<table><tr><th>布局</th><th>D=4 的两对 axis</th><th>常见展示位置</th></tr>
+<tr><td>相邻配对</td><td><code>(0,1)</code>、<code>(2,3)</code></td><td>RoFormer 论文公式常这样展示</td></tr>
+<tr><td>Qwen/Hugging Face half-split</td><td><code>(0,2)</code>、<code>(1,3)</code></td><td>本课代码和 Qwen reference</td></tr></table>
+<div class="warn card"><strong>本课统一使用 Qwen half-split。</strong>不要把论文的相邻配对索引直接抄进 Qwen-style 代码。两种方式都表达二维旋转，但内存排列不同。</div>
+<p>对 <code>x=[x0,x1,x2,x3]</code>：</p>
+<pre>前半段 first_half  = [x0,x1]
+后半段 second_half = [x2,x3]
+
+配对：x0 ↔ x2
+      x1 ↔ x3</pre>
+<p>为什么 D 必须是偶数？因为每个二维平面必须正好拿两个特征。D=5 会剩下一个无法配对的特征。</p></section>
+
+<section><h2>4. 把 rotate_half 拆成一张逐元素表</h2>
+<p>Qwen-style 代码：</p>
+<pre>first  = x[..., :D/2]
+second = x[..., D/2:]
+rotate_half(x) = concat(-second, first)</pre>
+<p>取 <code>x=[1,2,3,4]</code>，<code>D=4</code>，<code>D/2=2</code>：</p>
+<table><tr><th>输出 axis d</th><th>取哪个输入</th><th>是否变号</th><th>输出值</th><th>它服务哪一对</th></tr>
+<tr><td>0</td><td><code>x[2]=3</code></td><td>是</td><td>-3</td><td><code>(x0,x2)</code> 的新 x 交叉项</td></tr>
+<tr><td>1</td><td><code>x[3]=4</code></td><td>是</td><td>-4</td><td><code>(x1,x3)</code> 的新 x 交叉项</td></tr>
+<tr><td>2</td><td><code>x[0]=1</code></td><td>否</td><td>1</td><td><code>(x0,x2)</code> 的新 y 交叉项</td></tr>
+<tr><td>3</td><td><code>x[1]=2</code></td><td>否</td><td>2</td><td><code>(x1,x3)</code> 的新 y 交叉项</td></tr></table>
+<pre>rotate_half([1,2,3,4]) = [-3,-4,1,2]</pre>
+<p>这恰好把二维公式中的 <code>[-b,a]</code> 同时应用到两对轴上：</p>
+<pre>pair 0: [x0,x2]=[1,3] → rotate helper [-3,1]
+pair 1: [x1,x3]=[2,4] → rotate helper [-4,2]</pre></section>
+
+<section><h2>5. 完整手算一次 x*cos + rotate_half(x)*sin</h2>
+<p>仍用 <code>x=[1,2,3,4]</code>。假设：</p>
+<ul><li>pair 0，也就是 axis <code>(0,2)</code>，旋转 90°：cos=0、sin=1。</li><li>pair 1，也就是 axis <code>(1,3)</code>，旋转 0°：cos=1、sin=0。</li></ul>
+<p>为了让同一对 axis 使用同一个角度，Qwen 排列为：</p>
+<pre>cos = [pair0_cos, pair1_cos, pair0_cos, pair1_cos]
+    = [0,         1,         0,         1]
+
+sin = [pair0_sin, pair1_sin, pair0_sin, pair1_sin]
+    = [1,         0,         1,         0]</pre>
+<p>逐 axis 计算：</p>
+<table><tr><th>d</th><th><code>x[d]*cos[d]</code></th><th><code>rotate_half[d]*sin[d]</code></th><th>相加</th></tr>
+<tr><td>0</td><td><code>1*0=0</code></td><td><code>-3*1=-3</code></td><td>-3</td></tr>
+<tr><td>1</td><td><code>2*1=2</code></td><td><code>-4*0=0</code></td><td>2</td></tr>
+<tr><td>2</td><td><code>3*0=0</code></td><td><code>1*1=1</code></td><td>1</td></tr>
+<tr><td>3</td><td><code>4*1=4</code></td><td><code>2*0=0</code></td><td>4</td></tr></table>
+<pre>x_rope = [-3,2,1,4]</pre>
+<p>重新按二维 pair 查看：</p>
+<pre>pair 0: [axis0,axis2] = [1,3] → [-3,1]  # 旋转 90°
+pair 1: [axis1,axis3] = [2,4] → [ 2,4]  # 旋转 0°</pre>
+<p class="ok">到这里，RoPE 的核心逐元素计算已经完成。后面的 position_ids、inv_freq 只负责回答“每个 pair 到底应该旋转多少度”。</p></section>
+
+<section><h2>6. position_ids 是什么：先别想频率，只想 token 编号</h2>
+<p><code>position_ids</code> 就是 token 在当前生成序列中的位置编号。</p>
+<pre>token:        我    喜    欢
+position:    0     1     2
+position_ids = [[0,1,2]]</pre>
+<p>shape 是 <code>[B,S]</code>：</p>
+<ul><li><code>B</code>（batch size）= 同时处理几条序列。</li><li><code>S</code>（sequence length）= 每条序列有几个 token。</li></ul>
+<p>若 <code>B=1,S=3</code>，shape 是 <code>[1,3]</code>。这不是 embedding，也没有 D axis；它只是整数位置表。</p>
+<h3>先使用一个人为简化的旋转速度</h3>
+<p>为了理解，假设 pair 0 每走一个 position 转 90°，pair 1 每走一个 position 转 0°：</p>
+<table><tr><th>position</th><th>pair 0 角度</th><th>pair 1 角度</th></tr>
+<tr><td>0</td><td>0°</td><td>0°</td></tr>
+<tr><td>1</td><td>90°</td><td>0°</td></tr>
+<tr><td>2</td><td>180°</td><td>0°</td></tr></table>
+<p>position 0 没旋转；position 1 的第一对转 90°；position 2 的第一对转 180°。这就是“位置乘以旋转速度”。</p></section>
+
+<section><h2>7. inv_freq 只是“每前进一个 token，要转多快”</h2>
+<p><code>inv_freq</code> 是 inverse frequency（逆频率）。名字容易吓人，本课把它直接理解为：<strong>每个二维 pair 的基础旋转速度</strong>。</p>
+<pre>angle = position * inv_freq</pre>
+<p>上面的简化例子用弧度写：</p>
+<pre>inv_freq = [π/2, 0]  # pair0 每步 90°，pair1 每步 0°
+position_ids = [[0,1,2]]
+
+angles =
+position 0: [0*(π/2), 0*0] = [0,   0]
+position 1: [1*(π/2), 1*0] = [π/2, 0]
+position 2: [2*(π/2), 2*0] = [π,   0]</pre>
+<p>shape 变化：</p>
+<pre>position_ids [B,S]     = [1,3]
+inv_freq    [D/2]     = [2]
+angles      [B,S,D/2] = [1,3,2]</pre>
+<p>真实默认 RoPE 不会用 `[π/2,0]`，而是让不同 pair 有不同速度：</p>
+<pre>inv_freq[i] = 1 / base^(2*i/D)</pre>
+<p>这里：</p>
+<ul><li><code>i</code> 是 pair index，从 0 到 <code>D/2-1</code>。</li><li><code>base</code> 是配置中的频率基数，常见值为 10000。</li><li>前面的 pair 旋转较快，后面的 pair 旋转较慢，从而同时表示短距离与长距离变化。</li></ul>
+<p>用 <code>D=4、base=10000</code> 把真实公式算一遍。此时有两个 pair，所以 <code>i=[0,1]</code>：</p>
+<pre>pair 0: i=0
+inv_freq[0] = 1 / 10000^(2*0/4)
+            = 1 / 10000^0
+            = 1
+
+pair 1: i=1
+inv_freq[1] = 1 / 10000^(2*1/4)
+            = 1 / 10000^0.5
+            = 1 / 100
+            = 0.01
+
+所以 inv_freq = [1, 0.01]</pre>
+<p>若 token 的 position 是 2，两个 pair 的角度就是 <code>[2*1, 2*0.01]=[2,0.02]</code> 弧度。代码再对它们取 cos/sin。这里不要求手算 <code>cos(2)</code>；重点是看懂 position 与每个 pair 的旋转速度怎样相乘。</p>
+<div class="card"><strong>两套数字不要混淆：</strong>引导脚本使用 <code>[π/2,0]</code>，目的是让 90° 可以手算；独立作业的 <code>build_rope_cos_sin()</code> 使用上面的真实默认公式。</div>
+<p>现阶段要会实现这个公式，但不要求推导它为什么选 10000，也不学习 YaRN、dynamic、LongRoPE 等缩放变体。</p></section>
+
+<section><h2>8. 为什么 angles 要复制：从 D/2 回到 D</h2>
+<p>每个 pair 只有一个角度，但一个 pair 占两个 axis。Qwen half-split 要让 axis 0 和 axis 2 使用同一个角度，让 axis 1 和 axis 3 使用同一个角度。</p>
+<pre>angles = [angle_pair0, angle_pair1]  # [D/2]
+
+复制后 embedding = [angle_pair0, angle_pair1,
+                    angle_pair0, angle_pair1]  # [D]</pre>
+<p>再分别取 cos 和 sin：</p>
+<pre>cos = embedding.cos()
+sin = embedding.sin()</pre>
+<p>完整 shape 链：</p>
+<table><tr><th>阶段</th><th>具体 shape（B=1,S=3,D=4）</th><th>每个 axis</th></tr>
+<tr><td>position_ids</td><td><code>[1,3]</code></td><td>batch、token</td></tr>
+<tr><td>inv_freq</td><td><code>[2]</code></td><td>pair</td></tr>
+<tr><td>angles</td><td><code>[1,3,2]</code></td><td>batch、token、pair</td></tr>
+<tr><td>embedding/cos/sin</td><td><code>[1,3,4]</code></td><td>batch、token、head feature</td></tr></table>
+<p>position 0 的 angle 都是 0，所以 cos 都是 1、sin 都是 0：</p>
+<pre>x_rope = x*1 + rotate_half(x)*0 = x</pre>
+<p>因此 position 0 必须保持原向量不变，这是非常好用的单元测试。</p></section>
+
+<section><h2>9. 现在把一个 token 的 Q 和 K 放进来</h2>
+<p>假设某个 token 在 position 1，它的一个 Q head 是：</p>
+<pre>Q = [1,2,3,4]</pre>
+<p>仍使用 pair 0 转 90°、pair 1 转 0° 的简化 cos/sin：</p>
+<pre>Q_rope = [-3,2,1,4]</pre>
+<p>同位置的某个 K head 假设为：</p>
+<pre>K = [10,20,30,40]
+rotate_half(K) = [-30,-40,10,20]
+K_rope = [-30,20,10,40]</pre>
+<p>注意两件事：</p>
+<ol><li>Q 和 K 使用相同 position 对应的 cos/sin，但原始内容不同，所以旋转后数值也不同。</li><li>RoPE 没有把 Q/K 变成“位置向量”；它保留原内容，只改变二维特征对的方向。</li></ol></section>
+
+<section><h2>10. 为什么同时旋转 Q 和 K：点积看到的是角度差</h2>
+<p>Q/K 点积可以把箭头方向相似程度变成 score。用最小二维例子，原始 Q=K=<code>[1,0]</code>，每前进一个 position 旋转 90°：</p>
+<table><tr><th>position</th><th>旋转后向量</th></tr>
+<tr><td>0</td><td><code>[1,0]</code></td></tr>
+<tr><td>1</td><td><code>[0,1]</code></td></tr>
+<tr><td>2</td><td><code>[-1,0]</code></td></tr></table>
+<p>计算三次点积：</p>
+<pre>score(0,1) = [1,0] · [ 0,1] = 0
+score(1,2) = [0,1] · [-1,0] = 0
+score(0,2) = [1,0] · [-1,0] = -1</pre>
+<p><code>(0,1)</code> 和 <code>(1,2)</code> 的相对距离都为 1，所以位置带来的 score 效应相同。<code>(0,2)</code> 相距 2，效果不同。</p>
+<p>现在才引入压缩公式：</p>
+<pre>(R(mθ)q) · (R(nθ)k) = q · R((n-m)θ)k</pre>
+<p>读法：</p>
+<ul><li><code>R(mθ)</code>：把 Q 按位置 m 旋转。</li><li><code>R(nθ)</code>：把 K 按位置 n 旋转。</li><li>两者点积后，位置影响只剩角度差 <code>(n-m)θ</code>。</li></ul>
+<p>你不需要证明矩阵等式；只需要能用上面的具体向量解释“相同相对距离 → 相同的位置旋转差”。</p></section>
+
+<section><h2>11. RoPE 和 causal mask 完全不是一件事</h2>
+<table><tr><th>组件</th><th>回答的问题</th><th>做法</th></tr>
+<tr><td>RoPE</td><td>两个 token 相隔多远、方向关系如何影响匹配？</td><td>旋转 Q/K，改变 score</td></tr>
+<tr><td>causal mask</td><td>当前 token 是否允许看到某个未来 token？</td><td>把未来位置 score 设为负无穷</td></tr></table>
+<p>即使有 RoPE，position 0 仍可能对 position 10 算出一个有限 score；必须再用 causal mask 才能禁止看未来。因此 RoPE 不能替代 causal mask。</p></section>
+
+<section><h2>12. 为什么只旋转 Q/K，不旋转 V</h2>
+<p>把 Attention 分成两步：</p>
+<pre>第一步：Q_rope @ K_ropeᵀ → scores → weights
+        决定“去哪些位置取信息”
+
+第二步：weights @ V → head_output
+        按权重取回内容</pre>
+<p>位置应该影响“匹配谁”，所以进入 Q/K。V 是被取回的内容，不参与 Q·K score；Qwen 的 RoPE 不旋转 V。</p>
+<p>类比 C++ 数据处理：</p>
+<ul><li>Q/K 像查找键和索引比较规则。</li><li>V 像命中索引后取回的 payload。</li><li>RoPE 修改比较规则中的位置方向，不直接改 payload。</li></ul></section>
+
+<section><h2>13. 接回 GQA：Nq 和 Nkv 不同也能直接旋转</h2>
+<p>取一个具体配置：</p>
+<pre>B=2：两条序列
+S=5：每条 5 个 token
+Nq=6：6 个 Q heads
+Nkv=2：2 个 K/V heads
+D=4：每个 head 4 个特征</pre>
+<p>RoPE 前：</p>
+<pre>Q [B,Nq,S,D]  = [2,6,5,4]
+K [B,Nkv,S,D] = [2,2,5,4]
+V [B,Nkv,S,D] = [2,2,5,4]
+cos/sin        = [2,5,4]</pre>
+<p>cos/sin 没有 head axis。为了和 rank-4 的 Q/K 对齐，在 axis 1 插入长度 1：</p>
+<pre>cos.unsqueeze(1): [2,5,4] → [2,1,5,4]
+sin.unsqueeze(1): [2,5,4] → [2,1,5,4]</pre>
+<p>广播过程：</p>
+<table><tr><th>计算</th><th>head axis</th><th>结果</th></tr>
+<tr><td>Q × cos</td><td><code>6 × 1</code>，把同一 position 角度广播给 6 个 Q heads</td><td><code>[2,6,5,4]</code></td></tr>
+<tr><td>K × cos</td><td><code>2 × 1</code>，把同一 position 角度广播给 2 个 K heads</td><td><code>[2,2,5,4]</code></td></tr></table>
+<p>所以不需要先 repeat K。RoPE 只依赖 position 和 D，不依赖 head 数。旋转后：</p>
+<pre>Q_rope [2,6,5,4]  # shape 不变
+K_rope [2,2,5,4]  # shape 不变
+V      [2,2,5,4]  # 数值和 shape 都不变</pre></section>
+
+<section><h2>14. 完整执行顺序：这次每一步都说明职责</h2>
 <pre class="flow">hidden_states [B,S,H]
-→ RMSNorm → q/k/v projections → split heads
-→ Q [B,Nq,S,D] ─┐
-                  ├→ RoPE 只旋转 Q/K → GQA causal attention
-→ K [B,Nkv,S,D] ─┘
-→ V [B,Nkv,S,D] ────────────────────→ value aggregation
-→ head outputs → merge → o_proj → residual add</pre>
-<p><code>B</code> 是 batch size；<code>S</code> 是 token 数；<code>H</code> 是 hidden size；<code>Nq</code> 是 Q head 数；<code>Nkv</code> 是 K/V head 数；<code>D</code> 是每个 head 的特征数。</p>
-<div class="card"><strong>本节成果：</strong>实现 Qwen 风格 RoPE，使 Q/K shape 和向量长度保持不变，并用具体点积说明相同相对距离产生相同位置效应。</div></section>
+  → RMSNorm
+  → q_proj / k_proj / v_proj
+  → split + transpose
+       Q [B,Nq,S,D]
+       K [B,Nkv,S,D]
+       V [B,Nkv,S,D]
+  → 根据 position_ids 生成 cos/sin [B,S,D]
+  → RoPE(Q,K)
+       Q_rope [B,Nq,S,D]
+       K_rope [B,Nkv,S,D]
+       V 不变
+  → 若使用 Cache：保存/追加 K_rope 与 V
+  → GQA：K/V 按组供 Nq 个 Q heads 使用
+  → causal attention
+  → head outputs → merge → o_proj
+  → residual add</pre>
+<table><tr><th>步骤</th><th>做了什么</th><th>是否混合 token</th></tr>
+<tr><td>projection</td><td>从 hidden 生成 Q/K/V 内容</td><td>否，每个 token 独立</td></tr>
+<tr><td>RoPE</td><td>按各 token 的 position 旋转自己的 Q/K</td><td>否，每个 token 独立</td></tr>
+<tr><td>Q·K 与 softmax</td><td>比较 query position 与多个 key positions</td><td>是，Attention 在这里跨 token</td></tr>
+<tr><td>weights·V</td><td>从多个位置汇集内容</td><td>是</td></tr></table>
+<p>RoPE 本身不会把 token 0 的数据读进 token 1；它只是让两个 token 后续比较时带有位置差。</p></section>
 
-<section><h2>2. 为什么 attention 需要位置信息</h2>
-<p>第 0006 课的 score 是 <code>Q[q]·K[k]</code>。如果两个 token 的内容向量完全相同，而计算里没有任何位置输入，那么“第 1 个 token”和“第 10 个 token”对点积来说没有区别。</p>
-<p>RoPE 不把一个 position vector 直接加到 hidden state；它根据 token 的 position，把 Q 和 K 的二维特征对旋转不同角度。于是 score 同时取决于内容方向和两个 token 的相对位置。</p>
-<div class="warn card">RoPE 不是 causal mask。RoPE 让 score 感知距离；causal mask 仍负责禁止看未来。两者职责不同，不能互相替代。</div></section>
+<section><h2>15. Prefill 和 decode：position_id 不能每次从 0 开始</h2>
+<h3>Prefill</h3>
+<p>一次输入 5 个 prompt tokens：</p>
+<pre>position_ids = [[0,1,2,3,4]]</pre>
+<p>一次生成所有位置的 cos/sin，旋转全部 Q/K。</p>
+<h3>单步 decode</h3>
+<p>Cache 已有 5 个 tokens，新 token 是全局 position 5：</p>
+<pre>新 token position_id = [[5]]</pre>
+<p>若错误地重置成 0，新 Q/K 会使用 position 0 的恒等旋转，模型会把新 token 当成序列开头，和历史 K 的相对位置关系全部错位。</p>
+<p>Qwen 风格顺序是：</p>
+<pre>新 Q/K → 使用全局 position 做 RoPE
+→ 把旋转后的新 K 与未旋转的 V 追加到 Cache
+→ 当前 Q 与历史 Cache 做 Attention</pre>
+<p>0010 才实现 Cache 的完整增量更新；0008 只要求理解和验证这个位置关系。</p></section>
 
-<section><h2>3. 先只看二维：旋转到底做了什么</h2>
-<p>一个二维向量 <code>x=[a,b]</code> 逆时针旋转角度 <code>θ</code> 后：</p>
-<pre>x_rot[0] = a*cos(θ) - b*sin(θ)
-x_rot[1] = a*sin(θ) + b*cos(θ)</pre>
-<p>例如 <code>x=[3,4]</code>，旋转 90° 时 <code>cos=0、sin=1</code>：</p>
-<pre>x_rot = [3*0 - 4*1, 3*1 + 4*0] = [-4,3]
-
-旋转前长度 = sqrt(3²+4²) = 5
-旋转后长度 = sqrt((-4)²+3²) = 5</pre>
-<p>旋转改变方向，不改变长度。这是后面检查实现正确性的一个不变量。</p></section>
-
-<section><h2>4. Qwen 的 D=4 配对不是相邻元素</h2>
-<p>原始论文常用相邻配对 <code>(x0,x1)、(x2,x3)</code> 展示旋转。当前 Hugging Face Qwen 风格实现采用 <strong>half-split layout</strong>：先把最后一维分成前后两半，所以 <code>D=4</code> 时配对是 <code>(x0,x2)、(x1,x3)</code>。</p>
-<pre>x = [x0,x1,x2,x3]
-first_half  = [x0,x1]
-second_half = [x2,x3]
-
-rotate_half(x) = [-x2,-x3,x0,x1]</pre>
-<p>取 <code>x=[1,2,3,4]</code>：</p>
-<pre>rotate_half(x) = [-3,-4,1,2]</pre>
-<p>假设第一对 <code>(x0,x2)</code> 旋转 90°，第二对 <code>(x1,x3)</code> 旋转 0°，则：</p>
-<pre>cos = [0,1,0,1]
-sin = [1,0,1,0]
-
-x_rope = x*cos + rotate_half(x)*sin
-       = [1,2,3,4]*[0,1,0,1] + [-3,-4,1,2]*[1,0,1,0]
-       = [-3,2,1,4]</pre>
-<p>第一对从 <code>[1,3]</code> 变成 <code>[-3,1]</code>；第二对 <code>[2,4]</code> 不变。不要把 half-split 的 <code>rotate_half</code> 错写成相邻元素交换。</p></section>
-
-<section><h2>5. position_ids 怎样变成 cos/sin</h2>
-<p><code>position_ids</code> 是每个 token 的整数位置，shape 为 <code>[B,S]</code>。例如一条长度 3 的序列是 <code>[[0,1,2]]</code>。</p>
-<p>RoPE 给每个二维特征对一个不同的旋转频率。设 pair index 为 <code>i</code>，范围是 <code>0..D/2-1</code>：</p>
-<pre>inv_freq[i] = 1 / base^(2*i/D)
-angle[b,s,i] = position_ids[b,s] * inv_freq[i]</pre>
-<p><code>base</code> 是频率基数，标准示例常取 10000。<code>inv_freq</code> shape 是 <code>[D/2]</code>；angle shape 是 <code>[B,S,D/2]</code>。Qwen half-split 需要把 angles 复制一次：</p>
-<pre>angles [B,S,D/2]
-→ concat(angles, angles) = embedding [B,S,D]
-→ cos = cos(embedding), sin = sin(embedding)</pre>
-<p>position 0 的 angle 全为 0，所以 <code>cos=1、sin=0</code>，RoPE 是恒等变换。position 越大，同一频率对应的旋转角越大。</p>
-<p class="small">本课只学习默认 RoPE。linear、dynamic、YaRN、LongRoPE 等长上下文缩放变体暂不进入门禁。</p></section>
-
-<section><h2>6. GQA 中 cos/sin 怎样广播</h2>
-<p>取 <code>B=2、S=5、Nq=6、Nkv=2、D=4</code>：</p>
-<table><tr><th>tensor</th><th>rank/shape</th><th>axis 含义</th></tr>
-<tr><td>position_ids</td><td>rank 2，<code>[2,5]</code></td><td>batch、token position</td></tr>
-<tr><td>cos/sin</td><td>rank 3，<code>[2,5,4]</code></td><td>batch、token position、head feature</td></tr>
-<tr><td>unsqueeze 后 cos/sin</td><td>rank 4，<code>[2,1,5,4]</code></td><td>head axis 长度 1，可广播</td></tr>
-<tr><td>Q</td><td>rank 4，<code>[2,6,5,4]</code></td><td><code>[B,Nq,S,D]</code></td></tr>
-<tr><td>K</td><td>rank 4，<code>[2,2,5,4]</code></td><td><code>[B,Nkv,S,D]</code></td></tr>
-<tr><td>Q_rope</td><td><code>[2,6,5,4]</code></td><td>shape 与 Q 相同</td></tr>
-<tr><td>K_rope</td><td><code>[2,2,5,4]</code></td><td>shape 与 K 相同</td></tr>
-<tr><td>V</td><td><code>[2,2,5,4]</code></td><td>不经过 RoPE</td></tr></table>
-<p><code>[B,1,S,D]</code> 的 head axis 会分别广播到 6 个 Q heads 和 2 个 K heads，所以 Q/K head 数不同不妨碍使用同一组 position cos/sin。K 在仍为 <code>Nkv</code> 时旋转，不需要先 repeat 到 <code>Nq</code>。</p></section>
-
-<section><h2>7. 为什么它表达相对位置</h2>
-<p>设二维旋转矩阵为 <code>R(position*θ)</code>。Q 在位置 <code>m</code>，K 在位置 <code>n</code>：</p>
-<pre>score_position_part
-= (R(mθ) q) · (R(nθ) k)
-= q · R((n-m)θ) k</pre>
-<p>最终只留下相对位置 <code>n-m</code>。用每步旋转 90° 的最小例子：</p>
-<pre>原始 q=k=[1,0]
-position 0 → [ 1,0]
-position 1 → [ 0,1]
-position 2 → [-1,0]
-
-score(0,1) = [1,0]·[0,1]  = 0
-score(1,2) = [0,1]·[-1,0] = 0   # 相对距离同为 1
-score(0,2) = [1,0]·[-1,0] = -1  # 相对距离为 2</pre>
-<p>这不是说真实模型的所有 score 只由距离决定；Q/K 的内容也参与。这里证明的是 position 的影响以相对差进入点积。</p></section>
-
-<section><h2>8. 为什么旋转 Q/K，不旋转 V</h2>
-<p>Q/K 决定“当前 query 应该从哪些 key positions 取信息”，因此位置要进入它们的匹配 score。V 是被权重汇集的内容载体：</p>
-<pre>Q_rope @ K_ropeᵀ → scores → mask → softmax → weights
-weights @ V → head_output</pre>
-<p>如果把 V 也旋转，就会直接改变被汇集的内容表示；这不是本课和 Qwen 实现采用的 RoPE 语义。代码接口因此返回旋转后的 Q/K，V 原样沿后续路径使用。</p></section>
-
-<section><h2>9. full-sequence、prefill、decode 与 Cache 的边界</h2>
-<table><tr><th>阶段</th><th>position_ids</th><th>RoPE 行为</th></tr>
-<tr><td>full-sequence/prefill</td><td>通常为 <code>0..S-1</code></td><td>一次为全部 Q/K positions 构造 cos/sin 并旋转</td></tr>
-<tr><td>单步 decode</td><td>新 token 使用其绝对位置，如已有 5 个 token 时新位置为 5</td><td>只旋转新 Q/K；不能每步都把位置重置为 0</td></tr></table>
-<p>当前 Qwen 风格顺序是：split 后得到 Q/K/V → 对 Q/K 应用 RoPE → 若启用 Cache，追加旋转后的 K 和未旋转的 V → attention。0010 才会实现 Cache 的增量更新与 full-vs-decode parity；0008 只验收 RoPE 本身和这个明确位置。</p></section>
-
-<section><h2>10. PyTorch 实现逐行对应</h2>
+<section><h2>16. PyTorch 代码逐行翻译成人话</h2>
 <pre>def rotate_half(x):
-    half = x.shape[-1] // 2
-    x1 = x[..., :half]
-    x2 = x[..., half:]
-    return torch.cat((-x2, x1), dim=-1)
-
-cos = cos.unsqueeze(1)  # [B,S,D] → [B,1,S,D]
+    half = x.shape[-1] // 2       # D/2
+    first = x[..., :half]         # 前半段
+    second = x[..., half:]        # 后半段
+    return torch.cat((-second, first), dim=-1)</pre>
+<p><code>...</code> 表示前面的 B、N、S axis 全部原样保留，只切最后的 D axis。</p>
+<pre>cos = cos.unsqueeze(1)  # [B,S,D] → [B,1,S,D]
 sin = sin.unsqueeze(1)
+
 q_rope = q * cos + rotate_half(q) * sin
 k_rope = k * cos + rotate_half(k) * sin</pre>
-<p><code>...</code> 表示保留前面所有 axis，只切最后一个 axis。<code>unsqueeze(1)</code> 在 axis 1 插入长度 1 的 head 维。逐元素写法是：</p>
+<p>对 Q 的某一个元素：</p>
 <pre>q_rope[b,n,s,d]
 = q[b,n,s,d] * cos[b,s,d]
   + rotate_half(q)[b,n,s,d] * sin[b,s,d]</pre>
-<p>必须检查：D 为正偶数；Q/K 的 B、S、D 相同；cos/sin 是 <code>[B,S,D]</code>；device/dtype 相容。RoPE 不改变任何 tensor 的元素总数或 shape。</p></section>
+<p>cos/sin 没有 <code>n</code> 索引，因为同一 batch、同一 token position、同一 feature pair 对所有 heads 使用相同角度；PyTorch 通过长度 1 的 head axis 自动广播。</p></section>
 
-<section><h2>11. Parameter、Activation 与 State</h2>
-<table><tr><th>对象</th><th>类别</th><th>说明</th></tr>
-<tr><td>q/k projection weights</td><td>Parameter</td><td>训练学习并保存在 checkpoint</td></tr>
-<tr><td>position_ids、cos、sin、Q_rope、K_rope</td><td>Activation/运行输入</td><td>本次请求根据位置计算；默认 RoPE 没有为每个位置学习一张 Parameter 表</td></tr>
-<tr><td>inv_freq</td><td>确定性配置/常见 buffer</td><td>由 base 与 D 计算；实现中可缓存，但不是普通可训练 Parameter</td></tr>
-<tr><td>旋转后的历史 K 与 V</td><td>请求 State</td><td>decode Cache，0010 实现生命周期</td></tr></table>
-<p>对 export/runtime，RoPE 可能表现为 arange、乘法、cos、sin、slice、neg、cat 和逐元素运算，也可能被后端融合。无论图如何变化，Q/K shape、不旋转 V、position 0 恒等和长度保持是可用于对齐的不变量。</p></section>
+<section><h2>16.1 独立作业的输入契约：哪些不满足时必须报错</h2>
+<p>“输入契约”就是函数接受什么 shape、数据类型和设备。作业不是要求你猜这些条件；下面逐项列全。</p>
+<table><tr><th>函数</th><th>必须满足</th><th>为什么</th></tr>
+<tr><td><code>rotate_half(x)</code></td><td>最后一维 <code>D&gt;0</code> 且为偶数</td><td>每两个特征组成一个二维 pair，奇数 D 会剩一个</td></tr>
+<tr><td><code>build_rope_cos_sin(position_ids,D,base)</code></td><td><code>position_ids</code> 是 rank-2 的整数 tensor <code>[B,S]</code></td><td>它保存离散 token 编号，不是浮点特征</td></tr>
+<tr><td>同上</td><td><code>D&gt;0</code> 且为偶数；<code>base&gt;0</code></td><td>D 要配对；非正 base 无法按默认公式生成有效频率</td></tr>
+<tr><td><code>apply_rope(Q,K,cos,sin)</code></td><td>Q/K 都是 rank-4 <code>[B,N,S,D]</code>，并拥有相同 B、S、D</td><td>head 数 N 可以不同，其余三个 axis 必须对应同一批 token 和同一特征布局</td></tr>
+<tr><td>同上</td><td>Q、K、cos、sin 在同一个 device</td><td>CPU tensor 与 CUDA tensor 不能直接逐元素相乘</td></tr>
+<tr><td>同上</td><td>Q、K、cos、sin 使用相同 dtype</td><td>本作业要求输出精度与输入明确一致，禁止依赖隐式类型提升</td></tr>
+<tr><td>同上</td><td>cos/sin 都是 <code>[B,S,D]</code></td><td>插入 head axis 后才能广播为 <code>[B,1,S,D]</code></td></tr></table>
+<p>例如 Q 是 <code>float32</code>，cos 却是 <code>float64</code>，即使某些 PyTorch 运算可能自动提升类型，本作业也要求主动抛出 <code>ValueError</code>。这是<strong>明确的作业接口要求</strong>，不是 RoPE 数学定理。</p>
+<p>推荐检查顺序：先 rank → 再 B/S/D → 再 D 是否正偶数 → 再 device → 再 dtype → 最后做旋转。这样报错更接近真正原因。</p></section>
 
-<section><h2>12. 学习闭环</h2>
-<ol><li>运行 <code>exercises/0008_explore_rope.py</code>，核对 exact rotation、相对距离和 GQA broadcast。</li><li>完成 <code>exercises/0008_rope.py</code> 中的 TODO 并运行全部测试。</li><li>查看 <code>reference/0008-rope-cheatsheet.html</code>，然后关闭资料。</li><li>完成 <code>assessments/0008-rope.md</code>，填写 <code>submissions/0008.md</code>。</li><li>任何符号或步骤看不懂时，先向 Agent 提问，不要靠猜测完成门禁。</li></ol>
-<p>指定资料：<a href="https://arxiv.org/abs/2104.09864">RoFormer 原论文</a> 第 3.1、3.2 和 3.4.2 节；Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/docs/source/en/internal/rope_utils.md">Rotary embeddings utilities</a> 的 Overview；<a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a> 中 <code>rotate_half</code>、<code>apply_rotary_pos_emb</code> 和 Attention forward。正文足够完成作业，外链只用于核实。</p>
-<p><strong>门禁：</strong>独立代码以及闭卷第 1、2、3 题为关键项；全部通过且总分至少 80，才进入 Tiny Decoder Layer。</p></section>
-</body></html>
+<section><h2>17. Parameter、Activation、Buffer、State 分别是谁</h2>
+<table><tr><th>对象</th><th>类别</th><th>生命周期</th></tr>
+<tr><td>q/k projection weight</td><td>Parameter（训练参数）</td><td>训练学习，保存在 checkpoint，多请求共享</td></tr>
+<tr><td>position_ids</td><td>运行输入</td><td>每次请求/每个 step 根据实际位置产生</td></tr>
+<tr><td>inv_freq</td><td>确定性配置或 buffer</td><td>由 base、D 算出，可缓存；默认不是可训练 Parameter</td></tr>
+<tr><td>angles、cos、sin、Q_rope、K_rope</td><td>Activation（中间 tensor）</td><td>forward 中产生和使用</td></tr>
+<tr><td>历史 K_rope 与 V</td><td>请求 State</td><td>跨 decode steps 保留在 KV Cache</td></tr></table></section>
+
+<section><h2>18. 常见错误：出现哪种现象，先查哪里</h2>
+<table><tr><th>错误</th><th>会发生什么</th><th>检查方法</th></tr>
+<tr><td>把 Qwen 配对写成 (0,1)、(2,3)</td><td>shape 正确但数值与 reference 不一致</td><td>检查 <code>rotate_half([1,2,3,4])</code> 是否为 <code>[-3,-4,1,2]</code></td></tr>
+<tr><td>忘记复制 angles</td><td>cos/sin 最后一维只有 D/2，无法和 Q/K 的 D 相乘</td><td>检查 cos/sin 是否为 <code>[B,S,D]</code></td></tr>
+<tr><td>忘记 unsqueeze head axis</td><td><code>[B,S,D]</code> 无法正确广播到 <code>[B,N,S,D]</code></td><td>应变成 <code>[B,1,S,D]</code></td></tr>
+<tr><td>decode position 每步重置为 0</td><td>新 token 的位置关系错误</td><td>检查 position_id 是否等于历史长度</td></tr>
+<tr><td>旋转 V</td><td>改变 payload 语义，与 Qwen reference 不一致</td><td>确认接口只返回 Q_rope/K_rope</td></tr>
+<tr><td>D 为奇数</td><td>无法完整两两配对</td><td>入口检查 <code>D&gt;0 and D%2==0</code></td></tr></table></section>
+
+<section><h2>19. 四个必须保持的不变量</h2>
+<ol><li><strong>shape 不变：</strong>Q_rope 与 Q 相同，K_rope 与 K 相同。</li><li><strong>position 0 恒等：</strong>cos=1、sin=0，输出等于输入。</li><li><strong>长度保持：</strong>每个二维 pair 以及整个 head vector 的 L2 长度（即 <code>sqrt(sum(x²))</code>）不变。</li><li><strong>V 不变：</strong>RoPE 只旋转 Q/K。</li></ol>
+<p>这些不变量以后会用于 eager、export、converter、backend 和 runtime 分层对齐。即使设备 kernel 把 RoPE 融合了，语义仍必须满足它们。</p></section>
+
+<section><h2>20. 现在怎么学和提交</h2>
+<ol><li>先重新读第 1～5 节，确保能不看答案算出 <code>[1,2,3,4] → [-3,2,1,4]</code>。</li><li>运行 <code>exercises/0008_explore_rope.py</code>，把输出与第 4、5、10、13 节逐行对应。</li><li>完成 <code>exercises/0008_rope.py</code> 的 TODO。</li><li>查看 <code>reference/0008-rope-cheatsheet.html</code> 后关闭资料。</li><li>闭卷完成 <code>assessments/0008-rope.md</code>，填入 <code>submissions/0008.md</code>。</li></ol>
+<p>如果第 1～8 节仍有任何一步看不懂，先告诉 Agent 卡在哪个小标题，不要靠背公式继续。</p>
+<p>指定资料只用于核实：<a href="https://arxiv.org/abs/2104.09864">RoFormer 原论文</a> 第 3.1、3.2、3.4.2 节；Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/docs/source/en/internal/rope_utils.md">Rotary embeddings utilities</a> 的 Overview；<a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a> 中 <code>rotate_half</code>、<code>apply_rotary_pos_emb</code> 和 Attention forward。即使打不开外链，本文也足够完成作业。</p>
+<p><strong>门禁：</strong>独立代码和闭卷第 1、2、3 题全部通过，且总分至少 80，才进入 Tiny Decoder Layer。</p></section>
+</body>
+</html>

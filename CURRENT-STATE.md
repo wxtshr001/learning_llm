@@ -62,6 +62,8 @@
 
 ## 课程设计修订
 
+- 学习者指出 0008 初版虽有二维数字例子，仍过快跳到 `inv_freq`、旋转矩阵和相对位置公式，缺少可操作的前置直觉；判定为课程设计缺陷，不记为学习者知识缺口。
+- 0008 已重写为：角度/弧度/cos/sin 表 → `[3,4]` 旋转 90° → D=4 half-split 逐 axis 表 → 完整逐元素乘加 → position_ids → 简化 inv_freq → 默认公式 → 单 token Q/K → GQA broadcast → prefill/decode → 代码与调试不变量。
 - 学习者指出 0006 初版虽然声明“必须从零解释”，正文却直接给结论性例子与公式；同时没有交代 Transformer 整体、组件嵌入位置和数据流。
 - 该问题按 `AGENTS.md` 判定为课程设计缺陷，不记为学习者答错或知识缺口。
 - 0006 已改为：整体 Causal LM → decoder layer/residual stream → Q/K/V 来源与分工 → 逐元素 score/scale/mask/softmax/value → PyTorch → full-sequence/prefill/decode 边界。
