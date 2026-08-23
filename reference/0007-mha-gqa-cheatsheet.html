@@ -21,7 +21,5 @@ o_proj: Linear(Nq*D,H), weight [H,Nq*D]</pre><p>GQA 只减少 k/v projection；q
         ↑ K+V
 
 GQA/MHA cache ratio = Nkv/Nq</pre><p>Cache 保存 repeat 前的 Nkv heads。Q 不缓存。repeat 是计算映射，不应把 expanded Nq K/V 存入 Cache。</p></section>
-<section><h2>系统路径</h2><pre>hidden → RMSNorm → q/k/v projections → split
-→ RoPE(Q,K) → update/read KV Cache
-→ GQA causal attention → merge → o_proj → residual</pre><p>Prefill 仍有 Nq 份 score；decode 读取历史 K/V，减少 Nkv 可降低 Cache 容量与带宽压力。端到端速度必须实测。</p></section>
+<section><h2>后续系统路径预览（不属于 0007 门禁）</h2><p>RoPE 的接入位置与数学在 0008 从零讲授，KV Cache 的增量执行在 0010 从零讲授。本页不把尚未讲授的完整路径作为 0007 应掌握内容。</p><p>0007 只要求：prefill 仍有 Nq 份 score；decode 读取历史 K/V，减少 Nkv 可降低 Cache 容量与带宽压力。端到端速度必须实测。</p></section>
 <p><a href="../lessons/0007-mha-gqa-and-kv-cache-cost.html">返回课程</a></p></body></html>

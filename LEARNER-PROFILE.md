@@ -42,7 +42,7 @@
 
 ## 当前最近发展区
 
-当前进行 0007R：不重复已掌握的 GQA 主计算，只补 raw/split/logical/merge tensor 阶段、显式 head axis、concat 与平均的区别，以及 RoPE/KV Cache 在 Attention 子层中的连接位置。
+当前进行 0007R：不重复已掌握的 GQA 主计算，只补 raw/split/logical/merge tensor 阶段、显式 head axis、concat 与平均的区别。完整 GQA+RoPE+Cache 系统路径尚未充分讲授，不得在 0007R 验收。
 
 ## 更新规则
 

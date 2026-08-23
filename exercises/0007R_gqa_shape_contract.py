@@ -17,12 +17,6 @@ def gqa_stage_shapes(
     raise NotImplementedError
 
 
-def cache_percentages(num_query_heads: int, num_kv_heads: int) -> tuple[float, float]:
-    """Return (GQA/MHA capacity percent, saved percent)."""
-    # TODO 3: validate 0 < Nkv <= Nq and divisibility, then return both percentages.
-    raise NotImplementedError
-
-
 def run_tests() -> None:
     shapes = gqa_stage_shapes(3, 5, 32, 8, 2, 4)
     expected = {
@@ -42,8 +36,6 @@ def run_tests() -> None:
         "o_output": (3, 5, 32),
     }
     assert shapes == expected
-    assert cache_percentages(8, 2) == (25.0, 75.0)
-
     invalid = [
         (0, 5, 32, 8, 2, 4),
         (3, 5, 24, 8, 2, 4),
@@ -60,7 +52,6 @@ def run_tests() -> None:
     print("Lesson 0007R: all GQA stage-shape checks passed.")
     for name, shape in shapes.items():
         print(f"{name:>12}: {shape}")
-    print("capacity/saved percent:", cache_percentages(8, 2))
 
 
 if __name__ == "__main__":

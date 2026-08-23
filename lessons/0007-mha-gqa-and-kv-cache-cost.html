@@ -132,7 +132,7 @@ v_proj: Linear(hidden_size, num_key_value_heads * head_dim)
 o_proj: Linear(num_attention_heads * head_dim, hidden_size)
 
 num_key_value_groups = num_attention_heads // num_key_value_heads</pre>
-<p>这与本课的 <code>Nq</code>、<code>Nkv</code>、<code>group_size</code> 完全对应。真实 forward 还会在 score 前对 Q/K 应用 RoPE，在 decode 时更新 KV Cache，并可能选择 eager、SDPA 或 FlashAttention backend；这些连接先定位，RoPE 和 Cache 增量执行分别在 0008、0010 验收。</p>
+<p>这与本课的 <code>Nq</code>、<code>Nkv</code>、<code>group_size</code> 完全对应。真实 forward 还会加入 RoPE、KV Cache 和不同 attention backend；这些仅作为后续课程预告，不属于 0007 的理解或验收范围。RoPE 的位置与数学在 0008 从零讲授，Cache 增量执行在 0010 从零讲授。</p>
 <p>对后续 export/lowering，必须区分三层事实：模型语义是 Q head 到 KV group 的映射；PyTorch reference 可能显示 repeat/expand；目标 runtime 可能把它融合进 attention kernel。图里出现 repeat 不等于设备一定真的复制了完整 Cache。</p></section>
 
 <section><h2>11. 常见错误与正确性不变量</h2>

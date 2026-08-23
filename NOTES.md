@@ -1,6 +1,7 @@
 # Teaching Notes
 
-- 2026-08-23：第 0007 课首次提交 85/100。代码、head 映射、逐 head 数值、Cache 主公式与 decode 带宽解释通过；关键题 2 的 tensor 阶段/head axis 分类和关键题 6 的完整系统路径未通过。0007R 只补这些缺口；RoPE 只考连接位置，不提前考旋转数学。
+- 2026-08-23：学习者有效反对 0007 Q6.4。虽然课程末尾一句话和速查表出现过 RoPE/Cache 位置，但没有按当前知识水平充分讲授，不能据此设置完整系统路径关键门禁。成绩由 85 更正为 89；Q6.4 撤销；0007R 移除完整路径，只补 shape/axis。
+- 2026-08-23：第 0007 课初次裁决曾为 85/100，随后被上方异议复核记录 supersede；不得再按旧裁决复测 Q6.4。
 - 2026-08-14：开始 0007 MHA/GQA。课程按最终 on-device decode 目标反向组织：具体 head 映射 → shape/projection → Cache 字节 → prefill/decode 带宽边界 → Qwen 风格源码映射；强调 repeat 是计算映射、Cache 仍保存 Nkv heads，避免孤立讲概念。
 - 2026-08-14：0006R 95/100 通过。两个求和轴、decoder block 完整路径、positive-D 与 query.device contract 均已证明；求和上界/括号仅局部书写不规范，不升级为概念失败。按学习者要求只保存完成进度，不生成 0007。
 - 2026-08-12：0006 首次提交 87/100。手算、shape 主链、causal、scale 与 PyTorch 主计算正确；完整 score/output 求和轴公式、Attention/output projection 在 residual 前的位置，以及 device/positive-D contract 未通过关键门禁。0006R 只复测这三项，不重复已证明内容。

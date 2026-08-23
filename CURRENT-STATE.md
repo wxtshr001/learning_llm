@@ -4,7 +4,7 @@
 
 ## 当前门禁
 
-**第 0007 课首次提交 85/100；总分达标，但关键题 2、6 未通过，当前进入 0007R。**
+**第 0007 课异议复核后为 89/100；关键题 2 未通过，关键题 6 已更正为通过，当前进入只补 shape/axis 的 0007R。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -25,7 +25,7 @@
 - 0005R 90/100：参数与运行 tensor shape 门禁通过，第 0005 课正式完成。
 - 第 0006 课首次提交 87/100；手算、shape、causal 行为、scale 与 PyTorch 主计算通过。
 - 0006R 95/100：两个求和轴、完整 decoder block 路径与代码 contract 通过，第 0006 课正式完成。
-- 第 0007 课首次提交 85/100：head 映射、逐 head 数值、GQA 代码、KV Cache 主计算与 decode 带宽意义已证明；raw/split/merge tensor 阶段和完整系统路径待补强。
+- 第 0007 课异议复核后 89/100：head 映射、逐 head 数值、GQA 代码、KV Cache 主计算、decode 带宽意义与题面内 inference 迁移已证明；只剩 raw/split/merge tensor 阶段待补强。
 
 ## 第 0006 课最终能力状态
 
@@ -36,11 +36,11 @@
 
 ## 第 0007 课首次验收
 
-- 代码和关键题 1、5 通过；关键题 2、6 未通过，因此第 0007 课尚未完成。
+- 代码和关键题 1、5、6 通过；关键题 2 未通过，因此第 0007 课尚未完成。
 - `k/v raw` 应为 `[B,S,Nkv*D]`；首次答案把它写成 `[B,S,H]`，但在 projection 参数题中又正确算出了 output width，说明问题集中在阶段对应。
 - merge 与 `o_proj` 是 rank-3 tensor，没有显式 head axis；`Nq*D` 只是扁平后的特征宽度。
 - concat/merge 保留各 head 特征供 `o_proj` 学习组合；平均会不可逆丢失 head 身份和宽度。
-- RoPE 数学在 0008 才验收；0007R 只复测它在 `split → RoPE(Q,K) → KV Cache → attention` 路径中的位置。
+- 原 Q6.4 要求完整 GQA+RoPE+Cache 路径，但课程只做了一句话预告，教学覆盖不足；该小题已撤销，不扣分、不作门禁。完整路径与 RoPE 不进入 0007R。
 
 ## 课程设计修订
 
@@ -60,15 +60,15 @@
 
 ## 学习者下一步
 
-1. 阅读 `lessons/0007R-gqa-tensor-stages-and-system-path.html`。
+1. 阅读 `lessons/0007R-gqa-tensor-stages-and-head-axis.html`。
 2. 运行 `exercises/0007R_explore_gqa_stages.py`，核对 raw/split/logical/merge 的 rank 与 axis。
 3. 完成 `exercises/0007R_gqa_shape_contract.py` 的 TODO 并运行测试。
-4. 闭卷完成 `assessments/0007R-gqa-tensor-stages-and-system-path.md`，填写 `submissions/0007R.md`。
+4. 闭卷完成 `assessments/0007R-gqa-tensor-stages-and-head-axis.md`，填写 `submissions/0007R.md`。
 
 ## Agent 下一步
 
 - 收到 0007R 前不生成 0008。
-- 0007R 独立脚本与闭卷第 1、2 题通过，且总分至少 80，才正式完成第 0007 课并进入 RoPE。
+- 0007R 独立脚本与闭卷第 1 题通过，且总分至少 80，才正式完成第 0007 课并进入 RoPE。
 
 ## 最近证据
 

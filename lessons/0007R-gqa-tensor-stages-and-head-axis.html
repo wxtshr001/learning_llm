@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>0007R：GQA Tensor 阶段与完整子层路径</title>
+<title>0007R：GQA Tensor 阶段与显式 Head Axis</title>
 <style>body{max-width:980px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.flow{white-space:pre-wrap}</style></head><body>
-<h1>0007R：分清 GQA 的 Tensor 阶段，再把它接回 Decoder</h1>
-<p>这是一节约 30～40 分钟的针对性补强。0007 已经证明的 head 映射、causal attention 数值、代码实现和 Cache 主公式不再重复。</p>
+<h1>0007R：分清 GQA 的 Tensor 阶段与显式 Head Axis</h1>
+<p>这是一节约 25～35 分钟的针对性补强。0007 已经证明的 head 映射、causal attention 数值、代码实现、Cache 主公式和 inference 迁移不再重复。</p>
 
 <section><h2>1. 进入条件与本节成果</h2>
 <p><strong>可以直接使用：</strong>你已经能计算 <code>D=H/Nq</code>、执行 split/transpose/merge、解释 <code>Nq/Nkv</code> 连续分组，并实现 GQA attention。</p>
-<p><strong>本节必须补齐：</strong>raw projection、split tensor、逻辑展开 tensor 与 merge tensor 不是同一阶段；“宽度里含有 <code>Nq*D</code>”不等于“存在显式 head axis”；RoPE 和 KV Cache 只考系统位置，不考 RoPE 数学。</p>
-<div class="card"><strong>最终成果：</strong>面对一组新数字，你能完整写出每个阶段的 rank、shape、axis 含义，并从 <code>hidden_states</code> 一直追到 residual add。</div></section>
+<p><strong>本节必须补齐：</strong>raw projection、split tensor、逻辑展开 tensor 与 merge tensor 不是同一阶段；“宽度里含有 <code>Nq*D</code>”不等于“存在显式 head axis”。</p>
+<div class="card"><strong>最终成果：</strong>面对一组新数字，你能完整写出每个 GQA tensor 阶段的 rank、shape、axis 含义，并解释为什么 merge 不是 head average。</div></section>
 
 <section><h2>2. 先固定所有字母</h2>
 <table><tr><th>符号</th><th>含义</th><th>本节数字</th></tr>
@@ -84,34 +84,11 @@ average      → 16.5          # 只剩 1 个特征，来源不可恢复</pre>
 <p><code>o_proj</code> 是可训练的 Linear。它可以为 2、4、20、40 分别学习不同权重，再组合为 H 维输出。如果先平均，许多不同 head 组合都可能变成同一个 16.5，后面的 Linear 无法恢复丢失的信息。</p>
 <div class="warn card">平均并不是“另一种 shape 写法”，而是额外做了一次不可逆计算，同时把输入宽度从 <code>Nq*D</code> 降成 <code>D</code>，不再匹配本模型的 <code>o_proj: Linear(Nq*D,H)</code>。</div></section>
 
-<section><h2>8. 把 GQA 接回完整生成链</h2>
-<p>Causal LM 的大链条是：</p>
-<pre class="flow">token ids → embedding → 多个 decoder layers
-→ final RMSNorm → LM Head → vocabulary logits
-→ 选择 next token → 下一次 decode</pre>
-<p>GQA 在每个 decoder layer 的 Attention 子层里，不直接产生 logits：</p>
-<pre class="flow">hidden_states ───────────────────────────────────────── residual ───┐
-  │                                                               │
-  └→ RMSNorm → q/k/v projections → split heads                    │
-       → RoPE(Q,K) → update/read KV Cache                         │
-       → GQA causal attention → merge heads → o_proj ─────────────┤
-                                                                  ↓
-                                                           residual add</pre>
-<p><strong>RoPE</strong> 是 Rotary Position Embedding，中文常译旋转位置编码。本节只要求知道：它作用在 split 后的 Q 和 K 上，并位于 score 计算之前；旋转公式、角度和代码在 0008 才学习与验收。</p>
-<p><strong>KV Cache</strong> 是跨 decode step 保存的运行状态。K 经过所需的位置处理后与 V 一起写入/读取 Cache；Q 只用于当前 step，不持久缓存。GQA causal attention 使用当前 Q 与历史 K/V 计算，再把 head outputs 交给 merge 和 <code>o_proj</code>。</p>
-<table><tr><th>类别</th><th>本子层中的对象</th><th>生命周期</th></tr>
-<tr><td>Parameter（训练参数）</td><td>RMSNorm weight、q/k/v/o projection weights</td><td>模型持久保存，多请求共享</td></tr>
-<tr><td>Activation（本次计算中间值）</td><td>Q、当前 scores/weights、head output、merge output</td><td>随 forward/step 产生和释放</td></tr>
-<tr><td>State（请求状态）</td><td>未展开的 K/V Cache</td><td>在同一生成请求的多个 decode steps 间保留</td></tr></table></section>
+<section><h2>8. 本次明确不考什么</h2>
+<div class="warn card">0007R 不考完整 decoder/GQA 系统路径，也不考 RoPE 在路径中的位置。RoPE 将在 0008 从零讲授后再验收；KV Cache 的增量读写将在 0010 从零讲授后再验收。本次只判断你能否区分 tensor 的 raw、split、logical、head output、merge 与 <code>o_proj</code> 阶段。</div></section>
 
-<section><h2>9. 容量比例与节省比例不要混写</h2>
-<p>如果其他因子相同，Cache 大小与 <code>Nkv</code> 成正比。设 MHA 的 <code>Nq=Nkv=8</code>，GQA 的 <code>Nkv=2</code>：</p>
-<pre>GQA/MHA 容量比例 = 2/8 = 25%
-节省比例 = 1 - 25% = 75%</pre>
-<p>问“还剩多少”回答 25%；问“省了多少”回答 75%。</p></section>
-
-<section><h2>10. 学习闭环</h2>
-<ol><li>运行 <code>exercises/0007R_explore_gqa_stages.py</code>，逐行核对 rank、shape 与显式 head axis。</li><li>完成 <code>exercises/0007R_gqa_shape_contract.py</code> 中的 TODO 并运行测试。</li><li>关闭本文和 0007 速查表，完成 <code>assessments/0007R-gqa-tensor-stages-and-system-path.md</code>。</li><li>把运行输出和答案填入 <code>submissions/0007R.md</code>，然后让 Agent 复核。</li></ol>
-<p>指定资料：先只读本课；需要核实时再看 <a href="../reference/0007-mha-gqa-cheatsheet.html">0007 速查表</a>。外部证据可查看 PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html">scaled_dot_product_attention</a> 的 shape/GQA 约束，以及 Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a> 中 projection、RoPE、Cache 与 attention 的连接。正文已足够完成复测。</p>
-<p><strong>门禁：</strong>独立脚本、第 1 题和第 2 题全部通过，且总分至少 80。第 2 题不考 RoPE 的旋转数学或实现，只考系统位置。</p></section>
+<section><h2>9. 学习闭环</h2>
+<ol><li>运行 <code>exercises/0007R_explore_gqa_stages.py</code>，逐行核对 rank、shape 与显式 head axis。</li><li>完成 <code>exercises/0007R_gqa_shape_contract.py</code> 中的 TODO 并运行测试。</li><li>关闭本文和 0007 速查表，完成 <code>assessments/0007R-gqa-tensor-stages-and-head-axis.md</code>。</li><li>把运行输出和答案填入 <code>submissions/0007R.md</code>，然后让 Agent 复核。</li></ol>
+<p>指定资料：先只读本课；需要核实时再看 <a href="../reference/0007-mha-gqa-cheatsheet.html">0007 速查表</a>。外部证据可查看 PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html">scaled_dot_product_attention</a> 的 shape/GQA 约束，以及 Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a> 中 q/k/v/o projection 与 head mapping。正文已足够完成复测。</p>
+<p><strong>门禁：</strong>独立脚本和第 1 题通过，且总分至少 80。完整系统路径与 RoPE 不参与本次评分。</p></section>
 </body></html>

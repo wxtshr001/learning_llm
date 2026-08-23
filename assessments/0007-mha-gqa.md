@@ -50,10 +50,12 @@
 1. 解释 GQA 为什么在单步 decode 中尤其重要；
 2. 为什么不能仅凭 `Nkv` 从 16 降到 4 就断言端到端生成速度提升 4 倍？
 3. full-sequence/prefill 的 attention weights head axis 是 Nq 还是 Nkv？为什么？
-4. 从 hidden_states 到 residual add，写出 GQA 子层的完整顺序，并指出 RoPE 与 KV Cache 将在这条路径的哪里接入。
+4. ~~从 hidden_states 到 residual add，写出 GQA 子层的完整顺序，并指出 RoPE 与 KV Cache 将在这条路径的哪里接入。~~
+
+> 2026-08-23 评分更正：本小题撤销。原课程只用一句话预告 RoPE/Cache 接入，没有充分讲授，不能作为 0007 门禁或扣分项。
 
 ## 通过标准
 
-- 独立代码与第 1、2、5、6 题全部通过；
+- 独立代码与第 1、2、5、6 题全部通过；第 6 题第 4 小题已撤销，不参与门禁；
 - 总分至少 80；
 - 未通过时只补 head mapping、shape、Cache 计算或系统执行路径中的实际缺口。

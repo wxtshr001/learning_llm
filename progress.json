@@ -5,16 +5,16 @@
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
     "lesson_id": "0007R",
-    "title": "GQA tensor stages, explicit head axes, and full sublayer path",
+    "title": "GQA tensor stages and explicit head axes",
     "status": "awaiting_submission",
-    "lesson": "lessons/0007R-gqa-tensor-stages-and-system-path.html",
+    "lesson": "lessons/0007R-gqa-tensor-stages-and-head-axis.html",
     "guided_exercise": "exercises/0007R_explore_gqa_stages.py",
     "exercise": "exercises/0007R_gqa_shape_contract.py",
-    "assessment": "assessments/0007R-gqa-tensor-stages-and-system-path.md",
+    "assessment": "assessments/0007R-gqa-tensor-stages-and-head-axis.md",
     "submission": "submissions/0007R.md",
     "reference": "reference/0007-mha-gqa-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-23: lesson 0007 scored 85; 0007R targets raw/split/logical/merge stages, explicit head axes, concat semantics, and RoPE/Cache placement only",
+  "current_lesson_revision": "2026-08-23: lesson 0007 corrected to 89 after invalidating the under-taught RoPE/Cache path item; 0007R targets only raw/split/logical/merge stages, explicit head axes, and concat semantics",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R"],
   "next_normal_lesson": "0008",
@@ -23,9 +23,9 @@
     "minimum_score": 80,
     "score": null,
     "result": "awaiting_remediation_submission",
-    "critical_items": ["code", "question_1", "question_2"],
-    "failed_critical_items": ["lesson_0007_question_2", "lesson_0007_question_6"],
-    "previous_attempt": "lesson 0007 scored 85; code and questions 1/5 passed; questions 2/6 failed, while the 75 percent cache figure was treated as a local ratio-label confusion"
+    "critical_items": ["code", "question_1"],
+    "failed_critical_items": ["lesson_0007_question_2"],
+    "previous_attempt": "lesson 0007 corrected to 89; code and questions 1/5/6 passed, question 2 failed, and question 6.4 was invalidated because the complete RoPE/Cache path had not been sufficiently taught"
   },
   "last_verified_evidence": [
     "submissions/0007-feedback.md",
