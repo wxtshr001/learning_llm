@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>0007R：GQA Tensor 阶段与完整子层路径</title>
+<style>body{max-width:980px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.75 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:24px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.65em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.flow{white-space:pre-wrap}</style></head><body>
+<h1>0007R：分清 GQA 的 Tensor 阶段，再把它接回 Decoder</h1>
+<p>这是一节约 30～40 分钟的针对性补强。0007 已经证明的 head 映射、causal attention 数值、代码实现和 Cache 主公式不再重复。</p>
+
+<section><h2>1. 进入条件与本节成果</h2>
+<p><strong>可以直接使用：</strong>你已经能计算 <code>D=H/Nq</code>、执行 split/transpose/merge、解释 <code>Nq/Nkv</code> 连续分组，并实现 GQA attention。</p>
+<p><strong>本节必须补齐：</strong>raw projection、split tensor、逻辑展开 tensor 与 merge tensor 不是同一阶段；“宽度里含有 <code>Nq*D</code>”不等于“存在显式 head axis”；RoPE 和 KV Cache 只考系统位置，不考 RoPE 数学。</p>
+<div class="card"><strong>最终成果：</strong>面对一组新数字，你能完整写出每个阶段的 rank、shape、axis 含义，并从 <code>hidden_states</code> 一直追到 residual add。</div></section>
+
+<section><h2>2. 先固定所有字母</h2>
+<table><tr><th>符号</th><th>含义</th><th>本节数字</th></tr>
+<tr><td><code>B</code></td><td>Batch size，一次并行处理的序列数</td><td>2</td></tr>
+<tr><td><code>S</code></td><td>Sequence length，每条序列的 token 数</td><td>3</td></tr>
+<tr><td><code>H</code></td><td>Hidden size，residual stream 中每个 token 的特征数</td><td>8</td></tr>
+<tr><td><code>Nq</code></td><td>Number of query heads，Q head 数</td><td>4</td></tr>
+<tr><td><code>Nkv</code></td><td>Number of key/value heads，K/V head 数</td><td>2</td></tr>
+<tr><td><code>D</code></td><td>Head dimension，每个 head 的特征数</td><td>2</td></tr></table>
+<p>这里 <code>Nq*D=4*2=8=H</code>，而 <code>Nkv*D=2*2=4</code>。这两个乘积直接决定 q/k/v projection 的输出宽度。</p></section>
+
+<section><h2>3. raw projection 只有三个 axis</h2>
+<p><code>hidden_states</code> 是 rank 3（3 个 axis）的 tensor：</p>
+<pre>hidden_states [B,S,H] = [2,3,8]
+axis 0: batch
+axis 1: token position
+axis 2: hidden feature</pre>
+<p>对它做三个不同的 Linear projection：</p>
+<pre>q_proj: Linear(H, Nq*D)  → q_raw [B,S,Nq*D]  = [2,3,8]
+k_proj: Linear(H, Nkv*D) → k_raw [B,S,Nkv*D] = [2,3,4]
+v_proj: Linear(H, Nkv*D) → v_raw [B,S,Nkv*D] = [2,3,4]</pre>
+<p><code>raw</code> 表示 Linear 刚输出、还没把 head 拆成单独 axis。以 <code>k_raw[1,2,3]</code> 为例，三个索引分别是 batch 1、token 2、扁平特征 3。此时不能写 <code>k_raw[b,kv_head,s,d]</code>，因为它只有 3 个 axis。</p>
+<p>用 C++ 连续数组类比：最后一段长度 4 的内存以后可以解释为 <code>2×2</code>，但在 reshape 前，当前 tensor 视图仍只是一个长度 4 的维度。</p></section>
+
+<section><h2>4. split 后才出现显式 head axis</h2>
+<p>先把最后一维拆成“head 数 × 每 head 特征数”，再把 head axis 转到 axis 1：</p>
+<pre>q_raw [2,3,8]
+→ reshape [B,S,Nq,D] = [2,3,4,2]
+→ transpose          = Q [B,Nq,S,D] = [2,4,3,2]
+
+k_raw/v_raw [2,3,4]
+→ reshape [B,S,Nkv,D] = [2,3,2,2]
+→ transpose           = K/V [B,Nkv,S,D] = [2,2,3,2]</pre>
+<p>现在 Q/K/V 都是 rank 4。Q 的 axis 1 长度是 <code>Nq=4</code>；K/V 的 axis 1 长度是 <code>Nkv=2</code>。</p>
+<p>逐元素位置映射仍沿用你已经通过的规则：</p>
+<pre>k_raw[b,s,n*D+d] ↔ K[b,n,s,d]
+
+例如 Nkv=2,D=2：
+k_raw[1,2,3] 中 3 = 1*2+1
+所以它在 K 中是 K[1,1,2,1]</pre>
+<p>数值没有被计算或平均，只是用新的 axis 解释同一批元素。</p></section>
+
+<section><h2>5. 逻辑展开服务计算，持久 Cache 仍是 Nkv</h2>
+<p><code>Nq=4,Nkv=2</code> 时，Q head 到 KV head 的映射是 <code>[0,0,1,1]</code>。为便于理解，可以把 K/V 逻辑展开：</p>
+<pre>K/V stored:  [B,Nkv,S,D] = [2,2,3,2]
+K/V logical: [B,Nq,S,D]  = [2,4,3,2]</pre>
+<p><strong>stored</strong> 表示请求生命周期中真正持久保存在 KV Cache 的状态；<strong>logical</strong> 表示每个 Q head 计算时看见的映射关系。生产 kernel 可以按组索引，不一定真的复制出 expanded tensor。</p>
+<p>每个 Q head 都产生自己的 score 表：</p>
+<pre>scores/weights [B,Nq,Sq,Sk] = [2,4,3,3]
+head_output    [B,Nq,S,D]   = [2,4,3,2]</pre>
+<p><code>Sq</code> 是 query token 数，<code>Sk</code> 是 key token 数；本例是 full-sequence，所以两者都等于 3。</p></section>
+
+<section><h2>6. merge 后 Nq 进入宽度，不再是 axis</h2>
+<pre>head_output [B,Nq,S,D] = [2,4,3,2]   # rank 4，axis 1 是 Nq
+transpose              = [2,3,4,2]
+merge/reshape          = [B,S,Nq*D] = [2,3,8]  # rank 3
+o_proj output          = [B,S,H] = [2,3,8]      # rank 3</pre>
+<p>merge 后最后一维的宽度 8 是由 <code>Nq*D</code> 得到，但 shape 中没有一个独立维度等于 <code>Nq=4</code>。因此应说“宽度编码了所有 Q heads 的特征”，不能说“merge 的 head axis 是 Nq”。</p>
+<table><tr><th>tensor</th><th>是否有显式 Nq head axis</th><th>原因</th></tr>
+<tr><td>Q split</td><td>有</td><td><code>[B,Nq,S,D]</code> 的 axis 1</td></tr>
+<tr><td>logical K/V</td><td>有</td><td>为每个 Q head 提供逻辑视图</td></tr>
+<tr><td>scores/weights</td><td>有</td><td><code>[B,Nq,Sq,Sk]</code> 的 axis 1</td></tr>
+<tr><td>head_output</td><td>有</td><td><code>[B,Nq,S,D]</code> 的 axis 1</td></tr>
+<tr><td>merge</td><td>没有</td><td>rank 3，head 已折叠进最后一维</td></tr>
+<tr><td>o_proj output</td><td>没有</td><td>rank 3，回到 residual stream 的 H</td></tr></table></section>
+
+<section><h2>7. 为什么 concat/merge 不能换成平均</h2>
+<p>固定一个 token，设 4 个 head 每个只有 <code>D=1</code> 个输出：</p>
+<pre>head0=2, head1=4, head2=20, head3=40
+
+concat/merge → [2,4,20,40]   # 4 个特征，保留每个 head 身份
+average      → 16.5          # 只剩 1 个特征，来源不可恢复</pre>
+<p><code>o_proj</code> 是可训练的 Linear。它可以为 2、4、20、40 分别学习不同权重，再组合为 H 维输出。如果先平均，许多不同 head 组合都可能变成同一个 16.5，后面的 Linear 无法恢复丢失的信息。</p>
+<div class="warn card">平均并不是“另一种 shape 写法”，而是额外做了一次不可逆计算，同时把输入宽度从 <code>Nq*D</code> 降成 <code>D</code>，不再匹配本模型的 <code>o_proj: Linear(Nq*D,H)</code>。</div></section>
+
+<section><h2>8. 把 GQA 接回完整生成链</h2>
+<p>Causal LM 的大链条是：</p>
+<pre class="flow">token ids → embedding → 多个 decoder layers
+→ final RMSNorm → LM Head → vocabulary logits
+→ 选择 next token → 下一次 decode</pre>
+<p>GQA 在每个 decoder layer 的 Attention 子层里，不直接产生 logits：</p>
+<pre class="flow">hidden_states ───────────────────────────────────────── residual ───┐
+  │                                                               │
+  └→ RMSNorm → q/k/v projections → split heads                    │
+       → RoPE(Q,K) → update/read KV Cache                         │
+       → GQA causal attention → merge heads → o_proj ─────────────┤
+                                                                  ↓
+                                                           residual add</pre>
+<p><strong>RoPE</strong> 是 Rotary Position Embedding，中文常译旋转位置编码。本节只要求知道：它作用在 split 后的 Q 和 K 上，并位于 score 计算之前；旋转公式、角度和代码在 0008 才学习与验收。</p>
+<p><strong>KV Cache</strong> 是跨 decode step 保存的运行状态。K 经过所需的位置处理后与 V 一起写入/读取 Cache；Q 只用于当前 step，不持久缓存。GQA causal attention 使用当前 Q 与历史 K/V 计算，再把 head outputs 交给 merge 和 <code>o_proj</code>。</p>
+<table><tr><th>类别</th><th>本子层中的对象</th><th>生命周期</th></tr>
+<tr><td>Parameter（训练参数）</td><td>RMSNorm weight、q/k/v/o projection weights</td><td>模型持久保存，多请求共享</td></tr>
+<tr><td>Activation（本次计算中间值）</td><td>Q、当前 scores/weights、head output、merge output</td><td>随 forward/step 产生和释放</td></tr>
+<tr><td>State（请求状态）</td><td>未展开的 K/V Cache</td><td>在同一生成请求的多个 decode steps 间保留</td></tr></table></section>
+
+<section><h2>9. 容量比例与节省比例不要混写</h2>
+<p>如果其他因子相同，Cache 大小与 <code>Nkv</code> 成正比。设 MHA 的 <code>Nq=Nkv=8</code>，GQA 的 <code>Nkv=2</code>：</p>
+<pre>GQA/MHA 容量比例 = 2/8 = 25%
+节省比例 = 1 - 25% = 75%</pre>
+<p>问“还剩多少”回答 25%；问“省了多少”回答 75%。</p></section>
+
+<section><h2>10. 学习闭环</h2>
+<ol><li>运行 <code>exercises/0007R_explore_gqa_stages.py</code>，逐行核对 rank、shape 与显式 head axis。</li><li>完成 <code>exercises/0007R_gqa_shape_contract.py</code> 中的 TODO 并运行测试。</li><li>关闭本文和 0007 速查表，完成 <code>assessments/0007R-gqa-tensor-stages-and-system-path.md</code>。</li><li>把运行输出和答案填入 <code>submissions/0007R.md</code>，然后让 Agent 复核。</li></ol>
+<p>指定资料：先只读本课；需要核实时再看 <a href="../reference/0007-mha-gqa-cheatsheet.html">0007 速查表</a>。外部证据可查看 PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html">scaled_dot_product_attention</a> 的 shape/GQA 约束，以及 Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a> 中 projection、RoPE、Cache 与 attention 的连接。正文已足够完成复测。</p>
+<p><strong>门禁：</strong>独立脚本、第 1 题和第 2 题全部通过，且总分至少 80。第 2 题不考 RoPE 的旋转数学或实现，只考系统位置。</p></section>
+</body></html>

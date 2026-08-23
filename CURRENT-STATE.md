@@ -1,10 +1,10 @@
 # Current Learning State
 
-更新时间：2026-08-14
+更新时间：2026-08-23
 
 ## 当前门禁
 
-**0006R 95/100，通过；第 0007 课 MHA/GQA 已开始，等待学习者提交。**
+**第 0007 课首次提交 85/100；总分达标，但关键题 2、6 未通过，当前进入 0007R。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -25,6 +25,7 @@
 - 0005R 90/100：参数与运行 tensor shape 门禁通过，第 0005 课正式完成。
 - 第 0006 课首次提交 87/100；手算、shape、causal 行为、scale 与 PyTorch 主计算通过。
 - 0006R 95/100：两个求和轴、完整 decoder block 路径与代码 contract 通过，第 0006 课正式完成。
+- 第 0007 课首次提交 85/100：head 映射、逐 head 数值、GQA 代码、KV Cache 主计算与 decode 带宽意义已证明；raw/split/merge tensor 阶段和完整系统路径待补强。
 
 ## 第 0006 课最终能力状态
 
@@ -33,13 +34,13 @@
 - 已修正并证明 mask 跟随 `query.device`，且严格拒绝 `D=0`。
 - 公式上界和括号有局部书写不规范，但轴语义、代码和运行证据一致，不作为概念缺口。
 
-## 第 0007 课范围
+## 第 0007 课首次验收
 
-- 从单头 Attention 推广到 MHA、GQA 和 MQA，重点是 `Nq`/`Nkv` 的连续分组映射。
-- 推导 Q/K/V projection、split、attention、merge、o_proj 的完整数字 shape。
-- 区分计算时逻辑展开 K/V 与 Cache 中实际保存的 `Nkv` heads。
-- 计算 K/V projection 参数与跨 layer 的 KV Cache 字节数。
-- 解释 GQA 对 decode 内存容量/带宽的意义，以及为什么不能由 head 比例直接推断端到端加速比。
+- 代码和关键题 1、5 通过；关键题 2、6 未通过，因此第 0007 课尚未完成。
+- `k/v raw` 应为 `[B,S,Nkv*D]`；首次答案把它写成 `[B,S,H]`，但在 projection 参数题中又正确算出了 output width，说明问题集中在阶段对应。
+- merge 与 `o_proj` 是 rank-3 tensor，没有显式 head axis；`Nq*D` 只是扁平后的特征宽度。
+- concat/merge 保留各 head 特征供 `o_proj` 学习组合；平均会不可逆丢失 head 身份和宽度。
+- RoPE 数学在 0008 才验收；0007R 只复测它在 `split → RoPE(Q,K) → KV Cache → attention` 路径中的位置。
 
 ## 课程设计修订
 
@@ -53,24 +54,26 @@
 ## 非阻塞工程提醒
 
 - `split_heads()` 当前先解包 shape 再检查 rank；以后修改生产代码时应先验证再解包，但不将此记录为知识概念缺口。
+- `repeat_kv_for_query_heads()` 同样先读取 `shape[1]` 再验证 rank，且 `Nkv=0` 会先除零；按既有裁决作为非阻塞工程提醒，不作为 0007 概念门禁。
 - 0003 有一次 0.0010/0.0001 算术笔误，但最大误差与门限结论正确，不作为 dtype/device 概念缺口。
 - 0004 的 `training_step()` 类型标注为 `dict[str, float]`，但 prediction/loss 返回标量 Tensor；以后生产代码应使用 `.item()` 满足接口，不阻塞课程门禁。
 
 ## 学习者下一步
 
-1. 阅读 `lessons/0007-mha-gqa-and-kv-cache-cost.html`。
-2. 运行 `exercises/0007_explore_mha_gqa.py`，核对 Q head → KV head 映射与精确输出。
-3. 完成 `exercises/0007_mha_gqa.py` 的 TODO 并运行测试。
-4. 闭卷完成 `assessments/0007-mha-gqa.md`，填写 `submissions/0007.md`。
+1. 阅读 `lessons/0007R-gqa-tensor-stages-and-system-path.html`。
+2. 运行 `exercises/0007R_explore_gqa_stages.py`，核对 raw/split/logical/merge 的 rank 与 axis。
+3. 完成 `exercises/0007R_gqa_shape_contract.py` 的 TODO 并运行测试。
+4. 闭卷完成 `assessments/0007R-gqa-tensor-stages-and-system-path.md`，填写 `submissions/0007R.md`。
 
 ## Agent 下一步
 
-- 收到 0007 前不生成 0008。
-- 独立代码与闭卷第 1、2、5、6 题通过，且总分至少 80，才进入 RoPE。
+- 收到 0007R 前不生成 0008。
+- 0007R 独立脚本与闭卷第 1、2 题通过，且总分至少 80，才正式完成第 0007 课并进入 RoPE。
 
 ## 最近证据
 
-- `submissions/0006R-feedback.md`
-- `learning-records/0010-single-head-causal-attention-proven.md`
+- `submissions/0007-feedback.md`
+- `submissions/0007.md`
+- `learning-records/0011-mha-gqa-partial-remediation-required.md`
 
 环境配置见 `ENVIRONMENT.md`。硬件信息只代表记录时主机，另一平台必须运行 `exercises/0000_verify_pytorch.py` 自行验证。

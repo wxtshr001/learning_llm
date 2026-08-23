@@ -1,0 +1,67 @@
+"""Independent assignment for lesson 0007R: return every GQA stage shape."""
+
+from __future__ import annotations
+
+
+def gqa_stage_shapes(
+    batch: int,
+    sequence: int,
+    hidden: int,
+    num_query_heads: int,
+    num_kv_heads: int,
+    head_dim: int,
+) -> dict[str, tuple[int, ...]]:
+    """Return the semantic shape at every named GQA stage."""
+    # TODO 1: reject non-positive inputs, Nq % Nkv != 0, and H != Nq*D.
+    # TODO 2: return the shapes named in run_tests().
+    raise NotImplementedError
+
+
+def cache_percentages(num_query_heads: int, num_kv_heads: int) -> tuple[float, float]:
+    """Return (GQA/MHA capacity percent, saved percent)."""
+    # TODO 3: validate 0 < Nkv <= Nq and divisibility, then return both percentages.
+    raise NotImplementedError
+
+
+def run_tests() -> None:
+    shapes = gqa_stage_shapes(3, 5, 32, 8, 2, 4)
+    expected = {
+        "hidden": (3, 5, 32),
+        "q_raw": (3, 5, 32),
+        "k_raw": (3, 5, 8),
+        "v_raw": (3, 5, 8),
+        "q_split": (3, 8, 5, 4),
+        "k_split": (3, 2, 5, 4),
+        "v_split": (3, 2, 5, 4),
+        "logical_k": (3, 8, 5, 4),
+        "logical_v": (3, 8, 5, 4),
+        "scores": (3, 8, 5, 5),
+        "weights": (3, 8, 5, 5),
+        "head_output": (3, 8, 5, 4),
+        "merge": (3, 5, 32),
+        "o_output": (3, 5, 32),
+    }
+    assert shapes == expected
+    assert cache_percentages(8, 2) == (25.0, 75.0)
+
+    invalid = [
+        (0, 5, 32, 8, 2, 4),
+        (3, 5, 24, 8, 2, 4),
+        (3, 5, 32, 7, 2, 4),
+    ]
+    for args in invalid:
+        try:
+            gqa_stage_shapes(*args)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"must reject invalid shape contract: {args}")
+
+    print("Lesson 0007R: all GQA stage-shape checks passed.")
+    for name, shape in shapes.items():
+        print(f"{name:>12}: {shape}")
+    print("capacity/saved percent:", cache_percentages(8, 2))
+
+
+if __name__ == "__main__":
+    run_tests()

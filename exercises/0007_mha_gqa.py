@@ -15,7 +15,12 @@ def repeat_kv_for_query_heads(
     """Return logical [B,Nq,S,D] using contiguous Q-to-KV groups."""
     # TODO 1: validate rank 4, positive head counts, and Nq % Nkv == 0.
     # TODO 2: repeat each KV head group_size times along the head axis.
-    raise NotImplementedError
+    num_kv_heads = key_or_value.shape[1]
+    if key_or_value.dim() != 4 or num_query_heads <= 0 or num_query_heads % num_kv_heads != 0:
+        raise ValueError("invalid input")
+
+    group_size = num_query_heads // num_kv_heads
+    return key_or_value.repeat_interleave(group_size, dim=1)
 
 
 def gqa_causal_attention(
@@ -27,13 +32,39 @@ def gqa_causal_attention(
     # TODO 3: validate rank, B/S/D/device/dtype compatibility and D > 0.
     # TODO 4: map K/V to Nq heads, then apply scaled causal attention.
     # TODO 5: softmax along the key axis and aggregate V.
-    raise NotImplementedError
+    if not (query.dim() == key.dim() == value.dim() == 4):
+        raise ValueError("All inputs must be 4-dimensional")
 
+    B, Nq, S, D = query.shape
+    Bk, Nkv, Sk, Dk = key.shape
+    Bv, Nkv_v, Sv, Dv = value.shape
+
+    if not (B == Bk == Bv and S == Sk == Sv and D == Dk == Dv):
+        raise ValueError("Batch size, sequence length, and head dimension must match")
+    if D <= 0:
+        raise ValueError("Head dimension must be positive")
+    if query.device != key.device or query.device != value.device:
+        raise ValueError("All tensors must be on the same device")
+    if query.dtype != key.dtype or query.dtype != value.dtype:
+        raise ValueError("All tensors must have the same dtype")
+    if Nq % Nkv != 0:
+        raise ValueError(f"Number of query heads ({Nq}) must be divisible by number of KV heads ({Nkv})")
+
+    group_size = Nq // Nkv
+    key_expand = key.repeat_interleave(group_size, dim=1)
+    value_expand = value.repeat_interleave(group_size, dim=1)
+    scores = query @ key_expand.transpose(-2, -1)  / math.sqrt(D)
+    mask = torch.triu(torch.ones(S, Sk, dtype=torch.bool, device=query.device,), diagonal=1)
+    weights = F.softmax(scores.masked_fill(mask, float("-inf")), dim=-1)
+    output = weights @ value_expand
+    return (output, weights)
 
 def merge_query_heads(head_output: torch.Tensor) -> torch.Tensor:
     """Return [B,S,Nq*D] from [B,Nq,S,D]."""
     # TODO 6: transpose head/sequence, make contiguous, and reshape.
-    raise NotImplementedError
+    return head_output.transpose(1, 2).contiguous().view(
+        head_output.size(0), head_output.size(2), -1
+    )
 
 
 def kv_cache_bytes(
@@ -46,7 +77,14 @@ def kv_cache_bytes(
 ) -> int:
     """Return K+V cache payload bytes, excluding metadata/alignment."""
     # TODO 7: validate every factor is positive and return the byte formula.
-    raise NotImplementedError
+    if any(x <= 0 for x in (batch, layers, num_kv_heads, cached_tokens, head_dim, bytes_per_element)):
+        raise ValueError("All arguments must be positive integers")
+
+    # Elements per layer = batch * num_kv_heads * cached_tokens * head_dim
+    elements_per_layer = batch * num_kv_heads * cached_tokens * head_dim
+    # Both K and V → multiply by 2, then by number of layers
+    total_elements = elements_per_layer * 2 * layers
+    return total_elements * bytes_per_element
 
 
 def run_tests() -> None:

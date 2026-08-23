@@ -1,35 +1,35 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-14",
+  "updated_at": "2026-08-23",
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
-    "lesson_id": "0007",
-    "title": "MHA, GQA, head mapping, and KV Cache cost",
-    "status": "in_progress",
-    "lesson": "lessons/0007-mha-gqa-and-kv-cache-cost.html",
-    "guided_exercise": "exercises/0007_explore_mha_gqa.py",
-    "exercise": "exercises/0007_mha_gqa.py",
-    "assessment": "assessments/0007-mha-gqa.md",
-    "submission": "submissions/0007.md",
+    "lesson_id": "0007R",
+    "title": "GQA tensor stages, explicit head axes, and full sublayer path",
+    "status": "awaiting_submission",
+    "lesson": "lessons/0007R-gqa-tensor-stages-and-system-path.html",
+    "guided_exercise": "exercises/0007R_explore_gqa_stages.py",
+    "exercise": "exercises/0007R_gqa_shape_contract.py",
+    "assessment": "assessments/0007R-gqa-tensor-stages-and-system-path.md",
+    "submission": "submissions/0007R.md",
     "reference": "reference/0007-mha-gqa-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-08-14: lesson 0007 started with first-principles MHA/GQA mapping, projection shapes, KV Cache bytes, and prefill/decode system boundaries",
+  "current_lesson_revision": "2026-08-23: lesson 0007 scored 85; 0007R targets raw/split/logical/merge stages, explicit head axes, concat semantics, and RoPE/Cache placement only",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R"],
   "next_normal_lesson": "0008",
-  "next_course_generated": true,
+  "next_course_generated": false,
   "gate": {
     "minimum_score": 80,
     "score": null,
-    "result": "awaiting_submission",
-    "critical_items": ["code", "question_1", "question_2", "question_5", "question_6"],
-    "failed_critical_items": [],
-    "previous_adjudication": "lesson 0006R passed at 95; lesson 0007 must not repeat single-head attention and must verify GQA mapping and cache cost"
+    "result": "awaiting_remediation_submission",
+    "critical_items": ["code", "question_1", "question_2"],
+    "failed_critical_items": ["lesson_0007_question_2", "lesson_0007_question_6"],
+    "previous_attempt": "lesson 0007 scored 85; code and questions 1/5 passed; questions 2/6 failed, while the 75 percent cache figure was treated as a local ratio-label confusion"
   },
   "last_verified_evidence": [
-    "submissions/0006R-feedback.md",
-    "submissions/0006R.md",
-    "learning-records/0010-single-head-causal-attention-proven.md"
+    "submissions/0007-feedback.md",
+    "submissions/0007.md",
+    "learning-records/0011-mha-gqa-partial-remediation-required.md"
   ]
 }

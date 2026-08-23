@@ -21,12 +21,13 @@
 - 第 0005 课已正式通过；能区分 RMSNorm statistic/Parameter/output，以及 Linear 构造、`[out,in]` storage 与运行 tensor。
 - 第 0006 课已正式通过；能完成单头 Attention 手算、shape、softmax key axis、causal 行为、scale、两个求和轴与 PyTorch 实现，并能把 Attention/output projection 放回 decoder residual stream。
 - 已能处理 attention mask 的 device 与 positive-D 代码 contract；对增量解码和完整 KV Cache 仍只具初步直觉。
+- 第 0007 课首次提交已证明 MHA/GQA/MQA 边界、Q→KV 连续分组、逐 head 数值、GQA attention 代码、KV Cache 主公式和 decode 带宽意义。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
 - Python/PyTorch API 的语义、报错边界和调试方法。
-- GQA、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
+- GQA 各 tensor 阶段的 rank/axis、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
 
 ## 强制教学适配
 
@@ -41,7 +42,7 @@
 
 ## 当前最近发展区
 
-当前进行第 0007 课：在已掌握单头 Attention 和 head split/merge 的基础上，从零建立 MHA/GQA/MQA、`Nq/Nkv` 分组映射、projection width、KV Cache 字节与 prefill/decode 成本边界。
+当前进行 0007R：不重复已掌握的 GQA 主计算，只补 raw/split/logical/merge tensor 阶段、显式 head axis、concat 与平均的区别，以及 RoPE/KV Cache 在 Attention 子层中的连接位置。
 
 ## 更新规则
 

@@ -1,25 +1,24 @@
 # 从这里开始
 
-当前课程状态：**第 0001～0004 课已通过；正在进行第 0005 课。**
+当前课程状态：**第 0001～0006 课已通过；第 0007 课首次验收 85/100，正在进行 0007R 针对性补强。**
 
-请完成 [第 0005 课：RMSNorm 与 Gated FFN](./lessons/0005-rmsnorm-gated-ffn.html)。
+请完成 [0007R：GQA Tensor 阶段与完整子层路径](./lessons/0007R-gqa-tensor-stages-and-system-path.html)。
 
 ## 今天要做的事
 
-1. 阅读第 0005 课，先用具体数字理解 RMS、last axis 和三条 FFN 投影。
-2. 运行 [0005 探索脚本](./exercises/0005_explore_rmsnorm_gated_ffn.py)。
-3. 完成 [0005 独立作业](./exercises/0005_rmsnorm_gated_ffn.py) 中的 TODO。
-4. 查看 [RMSNorm 与 Gated FFN 速查表](./reference/0005-rmsnorm-gated-ffn-cheatsheet.html)，然后关闭资料。
-5. 闭卷完成 [0005 过关测试](./assessments/0005-rmsnorm-gated-ffn.md)。
-6. 把答案直接发给 Codex，或者填写 [0005 提交模板](./submissions/0005.md) 后告诉 Codex 检查。
+1. 阅读 0007R，逐阶段区分 raw、split、逻辑 K/V、head output、merge 与 `o_proj`。
+2. 运行 [0007R 探索脚本](./exercises/0007R_explore_gqa_stages.py)。
+3. 完成 [0007R 独立作业](./exercises/0007R_gqa_shape_contract.py) 中的 TODO。
+4. 关闭资料后完成 [0007R 闭卷复测](./assessments/0007R-gqa-tensor-stages-and-system-path.md)。
+5. 填写 [0007R 提交模板](./submissions/0007R.md)，然后告诉 Codex 检查。
 
 ## 我会如何判定
 
-- **通过**：独立作业与关键题 1、3 正确且总分至少 80，进入第 0006 课。
-- **针对性补强**：只补 RMS 计算、last-axis 广播或 gated FFN shape 中的实际缺口。
+- **通过**：独立作业与关键题 1、2 正确且总分至少 80，正式完成第 0007 课并进入第 0008 课。
+- **针对性补强**：只继续补实际仍未证明的 tensor 阶段或系统路径，不重复已通过的 GQA 主计算。
 - **评分约束**：不增加题面未声明条件，单次算术笔误结合完整证据判断。
 
-第 0005 课预计 100～130 分钟，目标是实现 RMSNorm 与 gated FFN，并与 PyTorch/reference 公式完成数值对齐。
+0007R 预计 30～40 分钟；RoPE 的旋转数学不在本次复测范围。
 
 ## 其他文件是什么
 

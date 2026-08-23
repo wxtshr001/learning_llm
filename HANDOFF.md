@@ -15,7 +15,7 @@
 - 第 0004 课最终 97/100 并正式通过。
 - 第 0005 课首次提交 82/100，0005R 最终 90/100；统计量/Parameter/运行 tensor 与 Linear `[out,in]` 门禁通过，第 0005 课正式完成。
 - 第 0006 课首次提交 87/100，0006R 最终 95/100；全部关键项通过，第 0006 课正式完成。
-- 当前第 0007 课 MHA/GQA 已生成并开始；重点验证 `Nq/Nkv` 映射、完整 shape、KV Cache 字节与 decode 系统意义。收到提交前不要生成第 0008 课。
+- 第 0007 课首次提交 85/100：代码与关键题 1、5 通过；关键题 2、6 未通过。当前进入 0007R，只补 raw/split/logical/merge tensor 阶段、显式 head axis、concat 与平均、以及 RoPE/KV Cache 的系统连接。收到 0007R 前不要生成第 0008 课。
 
 精确文件和下一动作以 `CURRENT-STATE.md` 与 `progress.json` 为准。
 
@@ -35,4 +35,4 @@
 
 ## Resume procedure
 
-遵守 `AGENTS.md`，先拉取 `main`。收到 0007 后复跑代码，并检查 head mapping、shape、Cache 计算和 Transformer inference 路径；关键项未通过不得进入 RoPE。
+遵守 `AGENTS.md`，先拉取 `main`。收到 0007R 后复跑独立脚本，并检查 tensor 阶段、显式 head axis 和完整 GQA 子层路径；关键项未通过不得进入 RoPE。
