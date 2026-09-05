@@ -9,6 +9,8 @@ PyTorch: 2.12.1+cu126
 PyTorch CUDA runtime: 12.6
 NumPy: 2.4.6
 GPU detected by PyTorch: NVIDIA GeForce RTX 2060 SUPER
+JupyterLab: 4.6.3
+IPython kernel: 7.3.0，已注册为 `Python 3 (llm)`
 ```
 
 以上是课程主要 Windows/NVIDIA 环境。2026-08-11 另在 Linux/ARM64 用户级隔离环境实测：Python 3.11.15、PyTorch 2.13.0+cpu、NumPy 2.4.6、CUDA unavailable；CPU matmul、autograd 和第 0006 课 attention reference 均通过。虚拟环境位于仓库之外，不提交其目录内容。
@@ -19,6 +21,15 @@ GPU detected by PyTorch: NVIDIA GeForce RTX 2060 SUPER
 conda activate llm
 python exercises/0000_verify_pytorch.py
 ```
+
+运行当前 Jupyter 教程：
+
+```powershell
+conda activate llm
+jupyter lab notebooks/0008-rope-from-rotation-to-gqa.ipynb
+```
+
+启动后选择 `Python 3 (llm)` kernel。JupyterLab 只监听本机地址时，notebook 代码仍在 `llm` Conda 环境中执行，可直接使用已安装的 CUDA PyTorch。
 
 `0000_verify_pytorch.py` 默认选择当前环境实际可用的 CUDA 或 CPU；如果某项实验明确要求 NVIDIA CUDA，使用：
 

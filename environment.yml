@@ -5,3 +5,5 @@ dependencies:
   - python=3.11
   - pip
   - numpy=2.4
+  - jupyterlab=4.6
+  - ipykernel=7.3

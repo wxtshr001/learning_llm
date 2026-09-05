@@ -37,3 +37,12 @@
 conda activate llm
 python exercises/0000_verify_pytorch.py
 ```
+
+启动当前 notebook：
+
+```powershell
+conda activate llm
+jupyter lab notebooks/0008-rope-from-rotation-to-gqa.ipynb
+```
+
+kernel 选择 `Python 3 (llm)`。
