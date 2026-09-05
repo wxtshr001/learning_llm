@@ -16,7 +16,7 @@
 - 第 0005 课首次提交 82/100，0005R 最终 90/100；统计量/Parameter/运行 tensor 与 Linear `[out,in]` 门禁通过，第 0005 课正式完成。
 - 第 0006 课首次提交 87/100，0006R 最终 95/100；全部关键项通过，第 0006 课正式完成。
 - 第 0007 课异议复核后为 89/100，0007R 最终 98/100；raw/split/logical/merge、显式 head axis 与 concat/average 已通过，第 0007 课正式完成。
-- 当前第 0008 课 RoPE 已生成并开始：从二维旋转、Qwen half-split、position cos/sin、相对点积和 GQA 广播完整教学。收到 0008 前不要生成第 0009 课。
+- 当前第 0008 课 RoPE 已生成并开始：Jupyter 主教程把二维旋转、Qwen half-split、position cos/sin、相对点积和 GQA 广播拆成知识点与可执行 PyTorch 单元；HTML 阅读版仍保留。收到 0008 前不要生成第 0009 课。
 
 精确文件和下一动作以 `CURRENT-STATE.md` 与 `progress.json` 为准。
 

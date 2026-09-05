@@ -16,6 +16,7 @@ table{border-collapse:collapse;width:100%}th,td{padding:.7em;border-bottom:1px s
 <p>先不要管论文公式。RoPE 做的事情可以先压缩成一句人话：</p>
 <div class="card"><strong>同一个 Q 或 K 向量，token 所在位置不同，就把它朝不同方向旋转；Attention 比较 Q 和 K 时，既比较内容，也感受到两个 token 相隔多远。</strong></div>
 <p><strong>RoPE</strong> 全称 Rotary Position Embedding，中文常译“旋转位置编码”。本课会从钟表指针和二维坐标开始，把每一个数字算清楚，再接到 Qwen 的 GQA 和 PyTorch。</p>
+<div class="card"><strong>推荐入口：</strong>本课已有配套的 <a href="../notebooks/0008-rope-from-rotation-to-gqa.ipynb">Jupyter 交互版</a>，知识点后紧跟可执行 PyTorch 单元；本文保留为静态阅读版。</div>
 
 <section><h2>0. 这次可以依赖什么，不能假设什么</h2>
 <p><strong>已经掌握，可以直接使用：</strong></p>

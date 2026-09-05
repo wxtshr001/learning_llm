@@ -8,6 +8,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import urllib.error
@@ -17,8 +18,24 @@ from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COURSE_SUFFIXES = {".md", ".html"}
+COURSE_SUFFIXES = {".md", ".html", ".ipynb"}
 LINK_PATTERN = re.compile(r'(?:href=["\']|\]\()(?P<url>[^"\')#\s]+)')
+
+
+def read_link_text(path: Path) -> str:
+    """Return prose that can contain links, excluding notebook code and outputs."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() != ".ipynb":
+        return text
+
+    notebook = json.loads(text)
+    markdown_sources: list[str] = []
+    for cell in notebook.get("cells", []):
+        if cell.get("cell_type") != "markdown":
+            continue
+        source = cell.get("source", "")
+        markdown_sources.append("".join(source) if isinstance(source, list) else source)
+    return "\n".join(markdown_sources)
 
 
 def collect_links() -> tuple[list[tuple[Path, str]], set[str]]:
@@ -28,7 +45,7 @@ def collect_links() -> tuple[list[tuple[Path, str]], set[str]]:
     for path in ROOT.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in COURSE_SUFFIXES:
             continue
-        text = path.read_text(encoding="utf-8")
+        text = read_link_text(path)
         for match in LINK_PATTERN.finditer(text):
             url = match.group("url")
             if url.startswith(("http://", "https://")):

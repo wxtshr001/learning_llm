@@ -62,6 +62,7 @@
 
 ## 课程设计修订
 
+- 2026-09-05：按学习者要求，0008 增加 Jupyter 主教程 `notebooks/0008-rope-from-rotation-to-gqa.ipynb`；35 个单元按“知识点 → 先预测 → Python/PyTorch 代码 → assert 验证”组织，14 个代码单元已在 `llm` 环境顺序执行通过。原 HTML 保留为备用阅读版，作业与门禁不变。
 - 学习者指出 0008 初版虽有二维数字例子，仍过快跳到 `inv_freq`、旋转矩阵和相对位置公式，缺少可操作的前置直觉；判定为课程设计缺陷，不记为学习者知识缺口。
 - 0008 已重写为：角度/弧度/cos/sin 表 → `[3,4]` 旋转 90° → D=4 half-split 逐 axis 表 → 完整逐元素乘加 → position_ids → 简化 inv_freq → 默认公式 → 单 token Q/K → GQA broadcast → prefill/decode → 代码与调试不变量。
 - 学习者指出 0006 初版虽然声明“必须从零解释”，正文却直接给结论性例子与公式；同时没有交代 Transformer 整体、组件嵌入位置和数据流。
@@ -80,8 +81,8 @@
 
 ## 学习者下一步
 
-1. 阅读 `lessons/0008-rope-from-rotation-to-gqa.html`。
-2. 运行 `exercises/0008_explore_rope.py`，核对 exact rotation、相对位置 score 和 GQA broadcast。
+1. 从上到下运行 `notebooks/0008-rope-from-rotation-to-gqa.ipynb`，先预测再执行每组代码单元；HTML 仅作备用阅读版。
+2. 如需脱离 notebook 复跑完整示范，运行 `exercises/0008_explore_rope.py`。
 3. 完成 `exercises/0008_rope.py` 的 TODO 并运行测试。
 4. 查看 `reference/0008-rope-cheatsheet.html` 后关闭资料。
 5. 闭卷完成 `assessments/0008-rope.md`，填写 `submissions/0008.md`。
