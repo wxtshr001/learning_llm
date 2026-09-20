@@ -1,0 +1,52 @@
+<section class="module" id="module-5" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in"><span class="module-number">05</span><h1 class="module-title">调试、生命周期与提交</h1><p class="module-subtitle">学会用三个不变量定位组装错误，而不是盯着一大串浮点数猜。</p></header>
+    <div class="module-body">
+      <section class="screen animate-in">
+        <h2 class="screen-heading">四类对象不要混</h2>
+        <div class="pattern-cards stagger-children">
+          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-1)"><div class="pattern-icon" style="background:var(--color-actor-1)">P</div><h4>Parameter</h4><p>两个 norm weight；q/k/v/o；gate/up/down projection weight。保存在 checkpoint。</p></div>
+          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-2)"><div class="pattern-icon" style="background:var(--color-actor-2)">IN</div><h4>运行输入</h4><p>hidden_states 与 position_ids。每次 forward 由调用方提供。</p></div>
+          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-4)"><div class="pattern-icon" style="background:var(--color-actor-4)">A</div><h4>Activation</h4><p>norm 输出、Q/K/V、weights、branch 输出、x1/x2。只服务本次计算。</p></div>
+          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-5)"><div class="pattern-icon" style="background:var(--color-actor-5)">S</div><h4>请求 State</h4><p>0009 没有。0010 才保存跨 decode step 的历史 K_rope 与 V Cache。</p></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">三个不变量像三只电表</h2>
+        <div class="icon-rows">
+          <div class="icon-row"><div class="icon-circle" style="background:var(--color-actor-2)">①</div><div><strong>Shape 电表</strong><p>layer 输入输出必须相同：[B,S,H]。若相加失败，沿支路向前找哪个出口没回到 H。</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background:var(--color-actor-5)">②</div><div><strong>Identity 电表</strong><p>把 o_proj 与 down_proj 置零，两条支路都应输出零，整个 layer 必须原样返回输入。</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background:var(--color-actor-1)">③</div><div><strong>Causal 电表</strong><p>只改未来 token，更早输出必须不变；否则优先检查 mask、S axis 或数据依赖。</p></div></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Identity 测试为什么有效</h2>
+        <div class="translation-block animate-in"><div class="translation-code"><span class="translation-label">0009_tiny_decoder_layer.py</span><pre><code><span class="code-line">zero_layer = TinyDecoderLayer(**config).to(device)</span>
+<span class="code-line">with torch.no_grad():</span>
+<span class="code-line">    zero_layer.self_attn.o_proj.weight.zero_()</span>
+<span class="code-line">    zero_layer.mlp.down_proj.weight.zero_()</span>
+<span class="code-line">torch.testing.assert_close(zero_layer(hidden_states, position_ids), hidden_states)</span></code></pre></div><div class="translation-english"><span class="translation-label">测试推理</span><div class="translation-lines"><p class="tl">建立一个结构完整的新 layer。</p><p class="tl">关闭梯度追踪，只修改测试权重。</p><p class="tl">让 Attention 支路的最终出口恒为零。</p><p class="tl">让 FFN 支路的最终出口恒为零。</p><p class="tl">两次 residual 都只加零，因此输出必须严格回到输入。</p></div></div></div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">从阅读到提交的闭环</h2>
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>运行可视化与 notebook</strong><p>先用图建立全局模型，再逐个执行 tensor 实验。</p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>运行引导 trace</strong><p>把终端输出与 shape 泳道图逐项对应。</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>独立完成四个 TODO</strong><p>只组装 module 与两条 residual，不重写已通过组件。</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>关闭资料完成闭卷题</strong><p>迁移到 B=2,S=5,H=12,Nq=3,Nkv=1,D=4,I=20。</p></div></div>
+        </div>
+        <div class="badge-list" style="margin-top:1.5rem"><div class="badge-item"><code class="badge-code">Notebook</code><span class="badge-desc">打开可执行实验</span></div><div class="badge-item"><code class="badge-code">Guided</code><span class="badge-desc">运行引导脚本</span></div><div class="badge-item"><code class="badge-code">TODO</code><span class="badge-desc">完成独立作业</span></div><div class="badge-item"><code class="badge-code">Exam</code><span class="badge-desc">完成闭卷测试</span></div></div>
+        <p class="takeaway" style="margin-top:1rem">页面末尾的“继续学习”区域提供这些文件的可点击入口。</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">最后一题：根据症状定位层级</h2>
+        <div class="quiz-container" id="quiz-m5"><div class="quiz-question-block" data-correct="c" data-explanation-right="正确。两个支路出口为零时，正确 residual 组装必然是 identity；失败说明 residual 基线或加法顺序错误。" data-explanation-wrong="这个测试已经让 Attention/FFN 的最终支路输出变成零，因此不需要先怀疑 RoPE 或 softmax 数值。"><h3 class="quiz-question">o_proj 和 down_proj 都置零后，输出仍不等于输入。最先检查什么？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>RoPE 的 base</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>softmax 精度</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>residual 保存对象与加法顺序</span></button></div><div class="quiz-feedback"></div></div><button class="quiz-check-btn" onclick="checkQuiz('quiz-m5')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m5')">重试</button></div>
+        <p style="margin-top:2rem">核实来源：<a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html">PyTorch nn.Module</a>；<a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a>。</p>
+      </section>
+    </div>
+  </div>
+</section>

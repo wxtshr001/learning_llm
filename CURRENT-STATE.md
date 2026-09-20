@@ -4,7 +4,7 @@
 
 ## 当前门禁
 
-**0008 95/100，通过；第 0009 课 Tiny Decoder Layer 已生成，当前等待学习者提交。**
+**0008 95/100，通过；第 0009 课 Tiny Decoder Layer 已重做为五模块可视化互动教程，当前等待学习者提交。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -72,6 +72,7 @@
 
 ## 课程设计修订
 
+- 2026-09-20：学习者指出 0009 初版过于简略，现有图不能清楚表达组件关系与数据流。0009 已增加独立可视化互动教程，按完整系统位置、第一条 Attention residual、第二条 FFN residual、shape/因果关系、调试/提交五个模块展开；包含 UML 风格组件图、逐步消息流、shape swimlane、token 因果依赖矩阵、交互动画与随堂题。该问题属于课程设计缺陷，不记为学习者知识缺口。
 - 2026-09-05：按学习者要求，0008 增加 Jupyter 主教程 `notebooks/0008-rope-from-rotation-to-gqa.ipynb`；35 个单元按“知识点 → 先预测 → Python/PyTorch 代码 → assert 验证”组织，14 个代码单元已在 `llm` 环境顺序执行通过。原 HTML 保留为备用阅读版，作业与门禁不变。
 - 学习者指出 0008 初版虽有二维数字例子，仍过快跳到 `inv_freq`、旋转矩阵和相对位置公式，缺少可操作的前置直觉；判定为课程设计缺陷，不记为学习者知识缺口。
 - 0008 已重写为：角度/弧度/cos/sin 表 → `[3,4]` 旋转 90° → D=4 half-split 逐 axis 表 → 完整逐元素乘加 → position_ids → 简化 inv_freq → 默认公式 → 单 token Q/K → GQA broadcast → prefill/decode → 代码与调试不变量。
@@ -91,11 +92,12 @@
 
 ## 学习者下一步
 
-1. 从上到下运行 `notebooks/0009-tiny-decoder-layer.ipynb`，每个预测题先回答再执行。
-2. 运行 `exercises/0009_explore_decoder_layer.py`，核对完整 shape 与两次 residual 数值。
-3. 完成 `exercises/0009_tiny_decoder_layer.py` 的组装 TODO 并运行测试。
-4. 查看 `reference/0009-tiny-decoder-layer-cheatsheet.html` 后关闭资料。
-5. 闭卷完成 `assessments/0009-tiny-decoder-layer.md`，填写 `submissions/0009.md`。
+1. 打开 `lessons/0009-tiny-decoder-layer-course/index.html`，依次完成五个可视化模块。
+2. 从上到下运行 `notebooks/0009-tiny-decoder-layer.ipynb`，每个预测题先回答再执行。
+3. 运行 `exercises/0009_explore_decoder_layer.py`，核对完整 shape 与两次 residual 数值。
+4. 完成 `exercises/0009_tiny_decoder_layer.py` 的组装 TODO 并运行测试。
+5. 查看 `reference/0009-tiny-decoder-layer-cheatsheet.html` 后关闭资料。
+6. 闭卷完成 `assessments/0009-tiny-decoder-layer.md`，填写 `submissions/0009.md`。
 
 ## Agent 下一步
 

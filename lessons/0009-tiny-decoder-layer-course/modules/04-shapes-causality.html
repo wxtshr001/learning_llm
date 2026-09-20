@@ -1,0 +1,55 @@
+<section class="module" id="module-4" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in"><span class="module-number">04</span><h1 class="module-title">Shape 与 token 依赖，一张图看全</h1><p class="module-subtitle">shape 回到 H 解决“能不能相加”，causal dependency 解决“谁会影响谁”。</p></header>
+    <div class="module-body">
+      <section class="screen animate-in">
+        <h2 class="screen-heading">完整 shape 泳道图</h2>
+        <svg viewBox="0 0 980 610" role="img" aria-label="Decoder layer 完整 shape 泳道图" style="width:100%;height:auto">
+          <defs><marker id="arrow-m4" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2A7B9B"/></marker></defs>
+          <rect x="20" y="20" width="940" height="260" rx="18" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="2"/><text x="45" y="55" font-size="20" font-weight="800">Attention 支路</text>
+          <rect x="20" y="310" width="940" height="260" rx="18" fill="#E8F5EE" stroke="#2D8B55" stroke-width="2"/><text x="45" y="345" font-size="20" font-weight="800">FFN 支路</text>
+          <g font-size="14" text-anchor="middle"><rect x="55" y="105" width="120" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="115" y="134" font-weight="700">x₀ / norm</text><text x="115" y="158">[B,S,H]</text>
+          <rect x="220" y="75" width="145" height="70" rx="10" fill="#fff" stroke="#D94F30" stroke-width="3"/><text x="292" y="104" font-weight="700">Q</text><text x="292" y="128">[B,Nq,S,D]</text><rect x="220" y="165" width="145" height="70" rx="10" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="292" y="194" font-weight="700">K / V</text><text x="292" y="218">[B,Nkv,S,D]</text>
+          <rect x="410" y="105" width="145" height="70" rx="10" fill="#fff" stroke="#7B6DAA" stroke-width="3"/><text x="482" y="134" font-weight="700">weights</text><text x="482" y="158">[B,Nq,S,S]</text>
+          <rect x="600" y="105" width="145" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="672" y="134" font-weight="700">head output</text><text x="672" y="158">[B,Nq,S,D]</text>
+          <rect x="790" y="105" width="130" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="4"/><text x="855" y="134" font-weight="700">x₁</text><text x="855" y="158">[B,S,H]</text>
+          <rect x="55" y="395" width="140" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="3"/><text x="125" y="424" font-weight="700">x₁ / norm</text><text x="125" y="448">[B,S,H]</text>
+          <rect x="285" y="395" width="165" height="70" rx="10" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="367" y="424" font-weight="700">gate / up / mixed</text><text x="367" y="448">[B,S,I]</text>
+          <rect x="540" y="395" width="150" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="3"/><text x="615" y="424" font-weight="700">down_proj</text><text x="615" y="448">[B,S,H]</text>
+          <rect x="790" y="395" width="130" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="4"/><text x="855" y="424" font-weight="700">x₂</text><text x="855" y="448">[B,S,H]</text></g>
+          <g stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m4)"><line x1="175" y1="140" x2="210" y2="110"/><line x1="175" y1="140" x2="210" y2="200"/><line x1="365" y1="110" x2="400" y2="140"/><line x1="365" y1="200" x2="400" y2="150"/><line x1="555" y1="140" x2="590" y2="140"/><line x1="745" y1="140" x2="780" y2="140"/></g>
+          <g stroke="#2D8B55" stroke-width="3" marker-end="url(#arrow-m4)"><line x1="195" y1="430" x2="275" y2="430"/><line x1="450" y1="430" x2="530" y2="430"/><line x1="690" y1="430" x2="780" y2="430"/></g>
+          <line x1="855" y1="175" x2="855" y2="385" stroke="#7B6DAA" stroke-width="4" marker-end="url(#arrow-m4)"/><text x="875" y="290" fill="#7B6DAA" font-weight="700">x₁ 进入第二支路</text>
+        </svg>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">token 依赖图：只有 Attention 打开横向通道</h2>
+        <p>下图中行是 query 位置，列是它允许读取的 key/value 位置。绿色格表示允许，灰色格表示 causal mask 屏蔽。</p>
+        <svg viewBox="0 0 700 420" role="img" aria-label="长度 3 序列的 causal attention 依赖矩阵" style="width:100%;height:auto;max-width:700px;display:block;margin:auto">
+          <g font-size="18" text-anchor="middle"><text x="350" y="35" font-weight="800">Key / Value position</text><text x="55" y="220" transform="rotate(-90 55 220)" font-weight="800">Query position</text>
+          <text x="240" y="85">0</text><text x="370" y="85">1</text><text x="500" y="85">2</text><text x="115" y="150">0</text><text x="115" y="260">1</text><text x="115" y="370">2</text></g>
+          <g stroke="#fff" stroke-width="5"><rect x="175" y="100" width="130" height="100" fill="#2D8B55"/><rect x="305" y="100" width="130" height="100" fill="#D9D4CC"/><rect x="435" y="100" width="130" height="100" fill="#D9D4CC"/><rect x="175" y="200" width="130" height="100" fill="#2D8B55"/><rect x="305" y="200" width="130" height="100" fill="#2D8B55"/><rect x="435" y="200" width="130" height="100" fill="#D9D4CC"/><rect x="175" y="300" width="130" height="100" fill="#2D8B55"/><rect x="305" y="300" width="130" height="100" fill="#2D8B55"/><rect x="435" y="300" width="130" height="100" fill="#2D8B55"/></g>
+          <g fill="#fff" font-size="16" text-anchor="middle" font-weight="700"><text x="240" y="155">可读</text><text x="240" y="255">可读</text><text x="370" y="255">可读</text><text x="240" y="355">可读</text><text x="370" y="355">可读</text><text x="500" y="355">可读</text></g>
+          <g fill="#6B6560" font-size="15" text-anchor="middle"><text x="370" y="155">未来</text><text x="500" y="155">未来</text><text x="500" y="255">未来</text></g>
+        </svg>
+        <div class="pattern-cards"><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-1)">N</div><h4>RMSNorm</h4><p>每行 token 单独处理 H。</p></div><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-2)">A</div><h4>Attention</h4><p>按绿色格跨位置汇集。</p></div><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-5)">F</div><h4>FFN</h4><p>每行 token 单独做 H→I→H。</p></div><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-4)">+</div><h4>Residual</h4><p>同位置、同 feature 相加。</p></div></div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">真实因果测试翻译</h2>
+        <div class="translation-block animate-in"><div class="translation-code"><span class="translation-label">0009_explore_decoder_layer.py</span><pre><code><span class="code-line">changed = hidden_states.clone()</span>
+<span class="code-line">changed[:, 2, :] += 1000</span>
+<span class="code-line">changed_attn_input = input_norm(changed)</span>
+<span class="code-line">changed_attn_output = attention(changed_attn_input, position_ids)</span>
+<span class="code-line">changed_x1 = changed + changed_attn_output</span>
+<span class="code-line">changed_output = changed_x1 + mlp(post_attention_norm(changed_x1))</span></code></pre></div><div class="translation-english"><span class="translation-label">实验含义</span><div class="translation-lines"><p class="tl">复制输入，避免修改原始证据。</p><p class="tl">只破坏最后的未来 token。</p><p class="tl">按真实顺序重新执行 norm。</p><p class="tl">重新执行唯一会跨 token 的 Attention。</p><p class="tl">完成第一次 residual。</p><p class="tl">完成第二支路，最后比较更早位置是否保持不变。</p></div></div></div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">迁移题</h2>
+        <div class="quiz-container" id="quiz-m4"><div class="quiz-question-block" data-correct="a" data-explanation-right="正确。未来位置 4 被 causal mask 屏蔽；其余组件也不跨 token，所以 0..3 不应变化。" data-explanation-wrong="先问唯一跨 token 的组件是谁，再查 causal 矩阵中更早 query 是否能读取位置 4。"><h3 class="quiz-question">长度 5 的序列只修改 token 4，哪些最终输出必须保持不变？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>位置 0、1、2、3</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>只有位置 0</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>没有任何位置</span></button></div><div class="quiz-feedback"></div></div><button class="quiz-check-btn" onclick="checkQuiz('quiz-m4')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m4')">重试</button></div>
+      </section>
+    </div>
+  </div>
+</section>

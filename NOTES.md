@@ -1,5 +1,6 @@
 # Teaching Notes
 
+- 2026-09-20：学习者指出 0009 初版虽然给出了完整代码路径，但正文太短、图示表达弱，无法建立组件之间的空间关系和执行顺序。已将可视化互动教程提升为主入口，补齐完整 Causal LM 位置图、两条 residual 的 UML/数据流、shape swimlane、causal token 依赖矩阵、逐步动画与随堂题；旧 HTML 仅保留备用。后续架构组装课不得用更多文字代替结构图。
 - 2026-09-20：0009 已生成。只新增 pre-norm decoder layer 的组装与两条 residual 数据依赖；已通过的 RMSNorm、GQA、RoPE、FFN 作为提供组件复用。固定数字为 B=1,S=3,H=4,Nq=2,Nkv=1,D=2,I=6，notebook 10 个代码单元与引导脚本已顺序执行通过。
 - 2026-09-20：0008 最终 95/100 通过。half-split、相对 score、GQA 广播和执行位置等关键项全部通过；范数平方项顺序为局部抄写，`position_ids` 被误归为 state 是非关键分类错误。历史 K_rope/V 才是请求 state；不安排 RoPE 补强，下一课组装 Tiny Decoder Layer。
 - 2026-09-05：已在 `llm` Conda 环境安装 JupyterLab 4.6.3 与 ipykernel 7.3.0，并注册 `Python 3 (llm)` kernel。真实 Jupyter 执行 0008 notebook 全部单元无错误，临时 Lab 服务 HTTP 200 后已关闭。

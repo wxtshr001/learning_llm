@@ -7,7 +7,8 @@
     "lesson_id": "0009",
     "title": "Tiny Decoder Layer with two pre-norm residual branches",
     "status": "in_progress",
-    "lesson": "notebooks/0009-tiny-decoder-layer.ipynb",
+    "lesson": "lessons/0009-tiny-decoder-layer-course/index.html",
+    "notebook": "notebooks/0009-tiny-decoder-layer.ipynb",
     "html_lesson": "lessons/0009-tiny-decoder-layer.html",
     "guided_exercise": "exercises/0009_explore_decoder_layer.py",
     "exercise": "exercises/0009_tiny_decoder_layer.py",
@@ -15,7 +16,7 @@
     "submission": "submissions/0009.md",
     "reference": "reference/0009-tiny-decoder-layer-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-09-20: lesson 0009 composes supplied, previously mastered RMSNorm/GQA/RoPE/FFN components into two concrete pre-norm residual branches with executable shape and causality traces",
+  "current_lesson_revision": "2026-09-20: lesson 0009 was expanded into a five-module interactive visual course with UML-style component, residual dataflow, tensor-shape, and causal-token dependency diagrams; the notebook remains the executable companion",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R", "0007R"],
   "next_normal_lesson": "0010",

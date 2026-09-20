@@ -2,15 +2,16 @@
 
 当前课程状态：**第 0001～0008 课已通过；正在进行第 0009 课 Tiny Decoder Layer。**
 
-请完成 [第 0009 课 Jupyter Notebook：组装 Tiny Decoder Layer](./notebooks/0009-tiny-decoder-layer.ipynb)。[HTML 阅读版](./lessons/0009-tiny-decoder-layer.html) 保留为备用资料。
+先打开 [第 0009 课可视化互动教程：组装 Tiny Decoder Layer](./lessons/0009-tiny-decoder-layer-course/index.html)。它按“完整网络位置 → Attention residual → FFN residual → shape 与因果关系 → 调试和提交”分成五个模块，并提供组件图、数据流图、shape 图、因果依赖图和交互演示。随后使用 [Jupyter Notebook](./notebooks/0009-tiny-decoder-layer.ipynb) 运行代码；[旧 HTML 阅读版](./lessons/0009-tiny-decoder-layer.html) 仅作备用。
 
 ## 今天要做的事
 
-1. 从上到下运行 0009 notebook；每个“先预测”先回答，再执行代码。
-2. 运行 [0009 引导脚本](./exercises/0009_explore_decoder_layer.py)，逐行核对两条 residual。
-3. 完成 [0009 独立作业](./exercises/0009_tiny_decoder_layer.py) 中的四个 TODO。
-4. 查看 [0009 速查表](./reference/0009-tiny-decoder-layer-cheatsheet.html)，然后关闭资料。
-5. 完成 [0009 闭卷测试](./assessments/0009-tiny-decoder-layer.md)，填写 [0009 提交模板](./submissions/0009.md)。
+1. 学完 0009 可视化互动教程的五个模块，并完成其中的小测和动画操作。
+2. 从上到下运行 0009 notebook；每个“先预测”先回答，再执行代码。
+3. 运行 [0009 引导脚本](./exercises/0009_explore_decoder_layer.py)，逐行核对两条 residual。
+4. 完成 [0009 独立作业](./exercises/0009_tiny_decoder_layer.py) 中的四个 TODO。
+5. 查看 [0009 速查表](./reference/0009-tiny-decoder-layer-cheatsheet.html)，然后关闭资料。
+6. 完成 [0009 闭卷测试](./assessments/0009-tiny-decoder-layer.md)，填写 [0009 提交模板](./submissions/0009.md)。
 
 ## 我会如何判定
 
@@ -18,7 +19,7 @@
 - **针对性补强**：只补 residual 基线、完整 shape 或 token mixing 中的实际缺口。
 - **评分约束**：不增加题面未声明条件，单次算术笔误结合完整证据判断。
 
-第 0009 课预计 100～130 分钟；不要求重写已通过组件，不实现 KV Cache，不考 backward 或多 layer 堆叠。
+第 0009 课预计 130～170 分钟；不要求重写已通过组件，不实现 KV Cache，不考 backward 或多 layer 堆叠。
 
 ## 其他文件是什么
 
@@ -42,7 +43,7 @@ python exercises/0000_verify_pytorch.py
 
 ```powershell
 conda activate llm
-jupyter lab notebooks/0008-rope-from-rotation-to-gqa.ipynb
+jupyter lab notebooks/0009-tiny-decoder-layer.ipynb
 ```
 
 kernel 选择 `Python 3 (llm)`。
