@@ -1,20 +1,24 @@
 # 从这里开始
 
-当前课程状态：**第 0001～0008 课已通过；下一课是第 0009 课 Tiny Decoder Layer。**
+当前课程状态：**第 0001～0008 课已通过；正在进行第 0009 课 Tiny Decoder Layer。**
 
-第 0008 课验收见 [0008 反馈](./submissions/0008-feedback.md)。第 0009 课将把已经分别掌握的 RMSNorm、GQA Attention、RoPE、gated FFN 和 residual 组装成一个完整 layer。
+请完成 [第 0009 课 Jupyter Notebook：组装 Tiny Decoder Layer](./notebooks/0009-tiny-decoder-layer.ipynb)。[HTML 阅读版](./lessons/0009-tiny-decoder-layer.html) 保留为备用资料。
 
 ## 今天要做的事
 
-第 0008 课已经完成，无需重做。下一步从第 0009 课开始组装 Tiny Decoder Layer。
+1. 从上到下运行 0009 notebook；每个“先预测”先回答，再执行代码。
+2. 运行 [0009 引导脚本](./exercises/0009_explore_decoder_layer.py)，逐行核对两条 residual。
+3. 完成 [0009 独立作业](./exercises/0009_tiny_decoder_layer.py) 中的四个 TODO。
+4. 查看 [0009 速查表](./reference/0009-tiny-decoder-layer-cheatsheet.html)，然后关闭资料。
+5. 完成 [0009 闭卷测试](./assessments/0009-tiny-decoder-layer.md)，填写 [0009 提交模板](./submissions/0009.md)。
 
 ## 我会如何判定
 
-- **0008 已通过**：95/100，独立代码与关键题 1、2、3 全部通过。
-- **非阻塞提醒**：`position_ids` 是运行输入；历史 K_rope 与 V 才是请求 state。
+- **通过**：独立代码与关键题 1、2、3 正确且总分至少 80，进入 KV Cache 增量执行。
+- **针对性补强**：只补 residual 基线、完整 shape 或 token mixing 中的实际缺口。
 - **评分约束**：不增加题面未声明条件，单次算术笔误结合完整证据判断。
 
-第 0009 课内容尚未生成；生成时会依据 0008 的实际证据，不重复已掌握的 RoPE 计算。
+第 0009 课预计 100～130 分钟；不要求重写已通过组件，不实现 KV Cache，不考 backward 或多 layer 堆叠。
 
 ## 其他文件是什么
 

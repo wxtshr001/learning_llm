@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>0009：组装 Tiny Decoder Layer</title>
+<style>body{max-width:1040px;margin:auto;padding:32px;background:#fbfaf6;color:#17232a;font:17px/1.78 Georgia,"Noto Serif SC",serif}section{border-top:1px solid #d7ddd8;padding:26px 0}code{background:#eaf2ef;padding:.1em .35em}pre{background:#17262c;color:#eef5f2;padding:18px;overflow:auto;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{padding:.7em;border-bottom:1px solid #d7ddd8;text-align:left;vertical-align:top}.card{border-left:5px solid #176b70;background:#edf7f4;padding:16px}.warn{border-left-color:#c86d31;background:#fff4e9}.ok{color:#176b70;font-weight:bold}@media(max-width:700px){body{padding:18px}table{font-size:.92em}}</style></head><body>
+<h1>0009：把已学组件组装成 Tiny Decoder Layer</h1>
+<div class="card"><strong>本课唯一新增能力：</strong>不再孤立看 RMSNorm、Attention、RoPE 和 FFN，而是按正确顺序接成一个可堆叠 decoder layer，并追踪两次 residual add。</div>
+
+<section><h2>0. 系统坐标：一个 layer 在整台“机器”的哪里</h2>
+<pre>token ids
+  → embedding
+  → decoder layer 0
+  → decoder layer 1
+  → ...
+  → final RMSNorm
+  → LM Head
+  → logits
+  → next token</pre>
+<p>本课只实现上图中的<strong>一个 decoder layer</strong>。输入是 <code>hidden_states [B,S,H]</code>，输出仍是 <code>[B,S,H]</code>，这样多个 layer 才能首尾相接。</p>
+<table><tr><th>字母</th><th>英文</th><th>含义</th><th>本课例子</th></tr><tr><td>B</td><td>Batch size</td><td>同时处理几条序列</td><td>1</td></tr><tr><td>S</td><td>Sequence length</td><td>每条序列的 token 数</td><td>3</td></tr><tr><td>H</td><td>Hidden size</td><td>residual stream 每个 token 的特征数</td><td>4</td></tr><tr><td>Nq</td><td>Query heads</td><td>Q head 数</td><td>2</td></tr><tr><td>Nkv</td><td>Key/value heads</td><td>K/V head 数</td><td>1</td></tr><tr><td>D</td><td>Head dimension</td><td>每个 head 的特征数</td><td>2</td></tr><tr><td>I</td><td>Intermediate size</td><td>FFN 临时扩展宽度</td><td>6</td></tr></table>
+<p>本例满足 <code>H=Nq*D=2*2=4</code>。</p></section>
+
+<section><h2>1. residual stream 是贯穿所有 layer 的主干</h2>
+<p>把 <code>hidden_states</code> 想成一条宽度固定为 H 的主干数据总线。Attention 和 FFN 是两条支路：它们读取主干，计算一个“修正量”，再加回主干。</p>
+<pre>主干 x ────────────────┐
+       → 子层计算 → delta ├→ x + delta
+                        ┘</pre>
+<p>具体数字：若某 token 的主干为 <code>x=[2,0,1,3]</code>，Attention 支路输出 <code>[0.1,0.2,-0.1,0]</code>，第一次 residual 后：</p>
+<pre>x1 = [2,0,1,3] + [0.1,0.2,-0.1,0]
+   = [2.1,0.2,0.9,3.0]</pre>
+<p>这是逐元素相加，所以两边必须同为 H 个特征。支路不能把 <code>[B,S,I]</code> 直接加回 <code>[B,S,H]</code>。</p></section>
+
+<section><h2>2. pre-norm 到底是什么意思</h2>
+<p><strong>pre</strong> 表示“在子层之前”。pre-norm layer 先把主干的副本送进 RMSNorm，再把子层结果加回<strong>未归一化的 residual</strong>：</p>
+<pre>residual_0 = x0
+attention_input = input_norm(x0)
+attention_output = self_attn(attention_input)
+x1 = residual_0 + attention_output</pre>
+<div class="warn card">RMSNorm 的输出进入 Attention；residual 加法左边保存的是原始 <code>x0</code>。不能把公式误写成 <code>norm(x0)+attention_output</code>。</div></section>
+
+<section><h2>3. 第一条支路：RMSNorm → GQA Attention → residual</h2>
+<pre>x0 [1,3,4]
+ → input_norm                 [1,3,4]
+ → q/k/v projections
+ → Q [1,2,3,2]
+   K [1,1,3,2]
+   V [1,1,3,2]
+ → RoPE(Q,K)
+ → causal GQA weights         [1,2,3,3]
+ → head output               [1,2,3,2]
+ → merge                     [1,3,4]
+ → o_proj                    [1,3,4]  = attention_output
+ → x1 = x0 + attention_output [1,3,4]</pre>
+<p>为什么需要 <code>o_proj</code>？Attention 内部用显式 heads 工作；residual stream 只接受 H 宽度。merge 把 <code>Nq*D</code> 扁平为 H，本课 H 恰好等于 Nq*D，再由 <code>o_proj</code> 学习组合各 head 特征。</p></section>
+
+<section><h2>4. 第二条支路不是从 x0 重新开始</h2>
+<pre>residual_1 = x1
+ffn_input = post_attention_norm(x1)
+ffn_output = mlp(ffn_input)
+x2 = residual_1 + ffn_output</pre>
+<p>这里的输入是已经包含 Attention 更新的 <code>x1</code>。如果写成 <code>x0 + ffn_output</code>，第一次 residual 加入的 Attention 信息就被绕开了。</p>
+<p>两个 RMSNorm 是两个不同 module：</p>
+<ul><li><code>input_norm</code> 服务 Attention 支路，拥有自己的 <code>weight [H]</code>。</li><li><code>post_attention_norm</code> 服务 FFN 支路，也拥有独立的 <code>weight [H]</code>。</li></ul></section>
+
+<section><h2>5. FFN 为什么先到 I，再必须回到 H</h2>
+<pre>ffn_input [1,3,4]
+ → gate_proj / up_proj        [1,3,6]
+ → silu(gate) * up = mixed    [1,3,6]
+ → down_proj                  [1,3,4] = ffn_output
+ → x2 = x1 + ffn_output       [1,3,4]</pre>
+<p><code>I=6</code> 是 FFN 内部临时工作宽度。<code>down_proj</code> 把 I 压回 H，才能和 <code>x1</code> 逐元素相加。</p></section>
+
+<section><h2>6. 用一个 token 看两次相加</h2>
+<p>引导脚本固定权重后，token 1 的实际输出为：</p>
+<pre>x0                  = [2.0000, 0.0000, 1.0000, 3.0000]
+attention branch    = [0.0018, 0.0046, 0.0073, 0.0101]
+x1                  = [2.0018, 0.0046, 1.0073, 3.0101]
+ffn branch          = [0.0003, 0.0008, 0.0012, 0.0016]
+x2 / layer_output   = [2.0022, 0.0053, 1.0085, 3.0116]</pre>
+<p>不要背这些小数。你需要看清：第二条支路读取 x1，最后也加回 x1。</p></section>
+
+<section><h2>7. 哪一步会混合 token</h2>
+<table><tr><th>步骤</th><th>跨 token 读取？</th><th>原因</th></tr><tr><td>RMSNorm</td><td>否</td><td>每个 token 只在自己的 H axis 求均方</td></tr><tr><td>Q/K/V Linear、RoPE</td><td>否</td><td>逐 token 投影或旋转</td></tr><tr><td>causal Attention</td><td>是</td><td>query position 汇集允许看到的多个 K/V positions</td></tr><tr><td>Gated FFN</td><td>否</td><td>每个 token 独立做 H→I→H</td></tr><tr><td>residual add</td><td>否</td><td>同一位置同一 feature 相加</td></tr></table>
+<p>因此只修改未来 token 2，位置 0、1 的完整 layer 输出必须不变；修改 token 0，则后面位置可能因 Attention 读取历史而改变。</p></section>
+
+<section><h2>8. 完整 PyTorch 骨架</h2>
+<pre>def forward(self, hidden_states, position_ids):
+    residual_0 = hidden_states
+    attention_input = self.input_norm(hidden_states)
+    attention_output = self.self_attn(attention_input, position_ids)
+    hidden_after_attention = residual_0 + attention_output
+
+    residual_1 = hidden_after_attention
+    ffn_input = self.post_attention_norm(hidden_after_attention)
+    ffn_output = self.mlp(ffn_input)
+    return residual_1 + ffn_output</pre>
+<p><code>residual_0</code> 和 <code>residual_1</code> 只是 Python tensor 引用，不是 Parameter，也不是跨请求保存的 Cache state。</p></section>
+
+<section><h2>9. Parameter、运行输入、activation、state</h2>
+<table><tr><th>类别</th><th>对象</th></tr><tr><td>Parameter</td><td>两个 norm weight；q/k/v/o projection weight；gate/up/down projection weight</td></tr><tr><td>运行输入</td><td>hidden_states、position_ids</td></tr><tr><td>Activation</td><td>norm 输出、Q/K/V、cos/sin、scores/weights、branch 输出、x1、x2</td></tr><tr><td>0009 请求 state</td><td>无；本课是一次 full-sequence forward</td></tr><tr><td>0010 才加入的 state</td><td>跨 decode steps 保存的历史 K_rope 与 V Cache</td></tr></table></section>
+
+<section><h2>10. full-sequence、prefill、decode 的边界</h2>
+<ul><li><strong>full-sequence / prefill：</strong>本课一次输入 S 个 token，所有中间 activation 都带 S。</li><li><strong>单步 decode：</strong>当前输入通常 S=1，但 Attention 还要读取历史 Cache；本课尚未实现。</li><li><strong>shape 不等于生命周期：</strong>当前 K/V 是一次 forward 的 activation；到 0010 被 Cache 保存后才成为请求 state。</li></ul></section>
+
+<section><h2>11. 三个最有用的测试不变量</h2>
+<ol><li><strong>shape：</strong>layer 输入输出都为 <code>[B,S,H]</code>。</li><li><strong>identity：</strong>把 Attention 的 <code>o_proj</code> 和 FFN 的 <code>down_proj</code> 置零，两条支路都输出零，layer 应原样返回输入。</li><li><strong>causal：</strong>只改未来 token，不得改变更早位置输出。</li></ol></section>
+
+<section><h2>12. 学习与提交顺序</h2>
+<ol><li>从上到下运行 <code>notebooks/0009-tiny-decoder-layer.ipynb</code>，每个“先预测”先回答。</li><li>运行 <code>exercises/0009_explore_decoder_layer.py</code>，对照两次 residual 的数字。</li><li>只完成 <code>exercises/0009_tiny_decoder_layer.py</code> 中组装相关 TODO。</li><li>查看 <a href="../reference/0009-tiny-decoder-layer-cheatsheet.html">速查表</a> 后关闭资料。</li><li>闭卷完成 <a href="../assessments/0009-tiny-decoder-layer.md">0009 测试</a>并填写提交模板。</li></ol>
+<p>主要核实来源：PyTorch <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html">nn.Module</a> 与 Hugging Face <a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a>。正文与代码足以完成作业，外链只用于核实。</p>
+<p><strong>门禁：</strong>独立代码和闭卷第 1、2、3 题全部通过且总分至少 80，才进入 0010 KV Cache 增量执行。</p></section>
+</body></html>

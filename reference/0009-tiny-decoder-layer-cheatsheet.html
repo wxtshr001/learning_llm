@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0009 Tiny Decoder Layer 速查</title><style>body{max-width:920px;margin:auto;padding:30px;font:16px/1.7 sans-serif;color:#17232a}section{border-top:1px solid #ccd6d2;padding:18px 0}pre{background:#17262c;color:#fff;padding:16px;overflow:auto}code{background:#eaf2ef;padding:.1em .3em}table{border-collapse:collapse;width:100%}th,td{padding:.55em;border-bottom:1px solid #ddd;text-align:left}</style></head><body>
+<h1>Tiny Decoder Layer 速查</h1>
+<section><h2>两条 pre-norm residual</h2><pre>x0 = hidden_states
+a  = input_norm(x0)
+b  = self_attn(a, position_ids)
+x1 = x0 + b
+
+c  = post_attention_norm(x1)
+d  = mlp(c)
+x2 = x1 + d</pre><p>第二次 residual 的基线是 <code>x1</code>，不是原始 <code>x0</code>。</p></section>
+<section><h2>完整 shape 主线</h2><pre>x0 / norm / attention_output / x1: [B,S,H]
+Q: [B,Nq,S,D]   K/V: [B,Nkv,S,D]
+weights: [B,Nq,S,S]
+gate / up / mixed: [B,S,I]
+ffn_output / x2: [B,S,H]</pre></section>
+<section><h2>谁混合 token</h2><table><tr><th>组件</th><th>跨 token？</th><th>说明</th></tr><tr><td>RMSNorm</td><td>否</td><td>只在每个 token 的 H axis 求均方</td></tr><tr><td>Attention</td><td>是</td><td>每个 query 汇集允许看到的 key/value positions</td></tr><tr><td>Gated FFN</td><td>否</td><td>每个 token 独立做 H→I→H</td></tr><tr><td>Residual add</td><td>否</td><td>相同 token、相同 feature 逐元素相加</td></tr></table></section>
+<section><h2>对象分类</h2><ul><li>Parameter：两个 norm weight；q/k/v/o projection weight；gate/up/down projection weight。</li><li>运行输入：hidden_states、position_ids。</li><li>Activation：norm 输出、Q/K/V、cos/sin、weights、branch 输出、x1/x2。</li><li>0009 请求 state：无。0010 加入的历史 K_rope/V Cache 才是跨 decode step state。</li></ul></section>
+<section><h2>三个关键不变量</h2><ol><li>layer 输入输出都是 <code>[B,S,H]</code>。</li><li>把 attention 的 <code>o_proj</code> 和 FFN 的 <code>down_proj</code> 置零，整个 layer 应成为 identity。</li><li>改变未来 token 不得影响更早位置输出。</li></ol></section>
+</body></html>

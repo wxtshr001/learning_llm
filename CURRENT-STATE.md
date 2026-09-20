@@ -4,7 +4,7 @@
 
 ## 当前门禁
 
-**0008 95/100，通过；第 0008 课 RoPE 正式完成。下一课为 0009 Tiny Decoder Layer。**
+**0008 95/100，通过；第 0009 课 Tiny Decoder Layer 已生成，当前等待学习者提交。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -91,12 +91,16 @@
 
 ## 学习者下一步
 
-进入第 0009 课 Tiny Decoder Layer：把 RMSNorm、GQA Attention、RoPE、gated FFN 和两次 residual add 组装成一个可运行 layer。
+1. 从上到下运行 `notebooks/0009-tiny-decoder-layer.ipynb`，每个预测题先回答再执行。
+2. 运行 `exercises/0009_explore_decoder_layer.py`，核对完整 shape 与两次 residual 数值。
+3. 完成 `exercises/0009_tiny_decoder_layer.py` 的组装 TODO 并运行测试。
+4. 查看 `reference/0009-tiny-decoder-layer-cheatsheet.html` 后关闭资料。
+5. 闭卷完成 `assessments/0009-tiny-decoder-layer.md`，填写 `submissions/0009.md`。
 
 ## Agent 下一步
 
-- 按已证明能力设计 0009，不重考 0008 已通过内容。
-- 0009 必须从完整 Causal LM 数据流定位 decoder layer，再逐步组装两个 pre-norm 子层与 residual。
+- 收到 0009 前不生成 0010。
+- 0009 独立代码与闭卷第 1、2、3 题通过，且总分至少 80，才进入 KV Cache 增量执行。
 
 ## 最近证据
 
