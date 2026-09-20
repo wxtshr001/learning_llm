@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -44,11 +44,10 @@
           <button class="nav-dot" data-target="module-2" data-tooltip="MODULE_2_NAME" role="tab" aria-label="Module 2: MODULE_2_NAME"></button>
           ...
         -->
-        <button class="nav-dot" data-target="module-1" data-tooltip="全局坐标" role="tab" aria-label="Module 1: 全局坐标"></button>
-        <button class="nav-dot" data-target="module-2" data-tooltip="Attention residual" role="tab" aria-label="Module 2: Attention residual"></button>
+        <button class="nav-dot" data-target="module-1" data-tooltip="完整 layer" role="tab" aria-label="Module 1: 完整 layer"></button>
+        <button class="nav-dot" data-target="module-2" data-tooltip="Attention shape" role="tab" aria-label="Module 2: Attention shape"></button>
         <button class="nav-dot" data-target="module-3" data-tooltip="FFN residual" role="tab" aria-label="Module 3: FFN residual"></button>
-        <button class="nav-dot" data-target="module-4" data-tooltip="Shape 与因果性" role="tab" aria-label="Module 4: Shape 与因果性"></button>
-        <button class="nav-dot" data-target="module-5" data-tooltip="调试与提交" role="tab" aria-label="Module 5: 调试与提交"></button>
+        <button class="nav-dot" data-target="module-4" data-tooltip="因果与生命周期" role="tab" aria-label="Module 4: 因果与生命周期"></button>
       </div>
     </div>
   </nav>
@@ -59,66 +58,68 @@
   <div class="module-content">
     <header class="module-header animate-in">
       <span class="module-number">01</span>
-      <h1 class="module-title">先看整台机器，再看一层</h1>
-      <p class="module-subtitle">Tiny Decoder Layer 不是四个算子排队，而是 residual 主干上的两次受控更新。</p>
+      <h1 class="module-title">本课只学一件事：把组件接成一层</h1>
+      <p class="module-subtitle">RMSNorm、GQA、RoPE 和 gated FFN 已经学过；0009 新增的是两条 pre-norm residual 的正确数据依赖。</p>
     </header>
 
     <div class="module-body">
       <section class="screen animate-in">
-        <h2 class="screen-heading">你正在构建哪一段？</h2>
-        <p>一个 <span class="term" data-definition="Decoder layer 是语言模型中反复堆叠的处理单元。每一层读取 hidden states，更新它们，再交给下一层。">decoder layer</span> 位于 embedding 与 final norm 之间。它必须保持输入输出接口一致，才能像相同规格的板卡一样连续堆叠。</p>
-        <svg viewBox="0 0 980 250" role="img" aria-label="Causal LM 从 token ids 到 logits 的结构图" style="width:100%;height:auto;margin-top:1.5rem">
+        <h2 class="screen-heading">先把字母固定下来</h2>
+        <p>下面七个字母会贯穿整课。每次看到 shape，都先把字母翻译成轴的含义。</p>
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">B = 1</code><span class="badge-desc">Batch size：同时处理 1 条序列</span></div>
+          <div class="badge-item"><code class="badge-code">S = 3</code><span class="badge-desc">Sequence length：每条序列有 3 个 token</span></div>
+          <div class="badge-item"><code class="badge-code">H = 4</code><span class="badge-desc">Hidden size：residual stream 中每个 token 有 4 个特征</span></div>
+          <div class="badge-item"><code class="badge-code">Nq = 2</code><span class="badge-desc">Query head 数量</span></div>
+          <div class="badge-item"><code class="badge-code">Nkv = 1</code><span class="badge-desc">Key/Value head 数量</span></div>
+          <div class="badge-item"><code class="badge-code">D = 2</code><span class="badge-desc">Head dimension：每个 head 有 2 个特征；H=Nq×D</span></div>
+          <div class="badge-item"><code class="badge-code">I = 6</code><span class="badge-desc">Intermediate size：FFN 内部临时扩展宽度</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">一张数据流图看完整 layer</h2>
+        <svg viewBox="0 0 1000 500" role="img" aria-label="Tiny Decoder Layer 两条 pre-norm residual 数据流" style="width:100%;height:auto">
           <defs><marker id="arrow-m1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2A7B9B"/></marker></defs>
-          <rect x="20" y="80" width="130" height="80" rx="14" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="85" y="112" text-anchor="middle" font-size="18" font-weight="700">token ids</text><text x="85" y="140" text-anchor="middle" font-size="14">[B,S]</text>
-          <line x1="150" y1="120" x2="195" y2="120" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m1)"/>
-          <rect x="205" y="80" width="140" height="80" rx="14" fill="#fff" stroke="#7B6DAA" stroke-width="3"/><text x="275" y="112" text-anchor="middle" font-size="18" font-weight="700">Embedding</text><text x="275" y="140" text-anchor="middle" font-size="14">[B,S,H]</text>
-          <line x1="345" y1="120" x2="390" y2="120" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m1)"/>
-          <rect x="400" y="45" width="190" height="150" rx="18" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="5"/><text x="495" y="82" text-anchor="middle" font-size="20" font-weight="800">Decoder Layer × L</text><text x="495" y="118" text-anchor="middle" font-size="15">本课：其中一层</text><text x="495" y="150" text-anchor="middle" font-size="16" font-weight="700">[B,S,H] → [B,S,H]</text><text x="495" y="178" text-anchor="middle" font-size="13">可重复堆叠</text>
-          <line x1="590" y1="120" x2="635" y2="120" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m1)"/>
-          <rect x="645" y="80" width="140" height="80" rx="14" fill="#fff" stroke="#2D8B55" stroke-width="3"/><text x="715" y="110" text-anchor="middle" font-size="17" font-weight="700">Final Norm</text><text x="715" y="138" text-anchor="middle" font-size="14">[B,S,H]</text>
-          <line x1="785" y1="120" x2="830" y2="120" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m1)"/>
-          <rect x="840" y="80" width="120" height="80" rx="14" fill="#fff" stroke="#D94F30" stroke-width="3"/><text x="900" y="110" text-anchor="middle" font-size="17" font-weight="700">LM Head</text><text x="900" y="138" text-anchor="middle" font-size="14">logits</text>
+          <g font-size="15" text-anchor="middle">
+            <rect x="30" y="190" width="105" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="82" y="217" font-weight="800">x₀</text><text x="82" y="242">[B,S,H]</text>
+            <rect x="185" y="190" width="130" height="70" rx="10" fill="#fff" stroke="#D94F30" stroke-width="3"/><text x="250" y="217" font-weight="800">input_norm</text><text x="250" y="242">[B,S,H]</text>
+            <rect x="365" y="190" width="130" height="70" rx="10" fill="#fff" stroke="#7B6DAA" stroke-width="3"/><text x="430" y="217" font-weight="800">Attention</text><text x="430" y="242">[B,S,H]</text>
+            <circle cx="550" cy="225" r="34" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="3"/><text x="550" y="232" font-size="25" font-weight="800">+</text>
+            <rect x="630" y="190" width="105" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="4"/><text x="682" y="217" font-weight="800">x₁</text><text x="682" y="242">[B,S,H]</text>
+            <rect x="630" y="345" width="130" height="70" rx="10" fill="#fff" stroke="#D94F30" stroke-width="3"/><text x="695" y="372" font-weight="800">post_norm</text><text x="695" y="397">[B,S,H]</text>
+            <rect x="805" y="345" width="105" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="3"/><text x="857" y="372" font-weight="800">FFN</text><text x="857" y="397">[B,S,H]</text>
+            <circle cx="930" cy="225" r="34" fill="#E8F5EE" stroke="#2D8B55" stroke-width="3"/><text x="930" y="232" font-size="25" font-weight="800">+</text>
+            <rect x="805" y="55" width="105" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="4"/><text x="857" y="82" font-weight="800">x₂</text><text x="857" y="107">[B,S,H]</text>
+          </g>
+          <g fill="none" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m1)">
+            <line x1="135" y1="225" x2="175" y2="225"/><line x1="315" y1="225" x2="355" y2="225"/><line x1="495" y1="225" x2="510" y2="225"/><line x1="584" y1="225" x2="620" y2="225"/>
+            <line x1="682" y1="260" x2="682" y2="335"/><line x1="760" y1="380" x2="795" y2="380"/><path d="M910 380 C965 380 965 270 950 250"/>
+            <path d="M82 180 C82 95 550 95 550 180" stroke="#D94F30" stroke-dasharray="8 5"/><path d="M682 180 C682 145 930 145 930 180" stroke="#7B6DAA" stroke-dasharray="8 5"/><line x1="916" y1="202" x2="878" y2="128"/>
+          </g>
+          <text x="300" y="78" text-anchor="middle" fill="#D94F30" font-weight="700">residual_0 保存未归一化的 x₀</text>
+          <text x="806" y="140" text-anchor="middle" fill="#7B6DAA" font-weight="700">residual_1 保存已经含 Attention 更新的 x₁</text>
+          <text x="500" y="465" text-anchor="middle" font-size="17" font-weight="800">x₁ = x₀ + Attention(input_norm(x₀))　　x₂ = x₁ + FFN(post_attention_norm(x₁))</text>
         </svg>
+        <div class="callout callout-accent"><div class="callout-icon">!</div><div class="callout-content"><strong class="callout-title">本课最重要的依赖</strong><p>第二条支路必须从 x₁ 开始。若写成 x₀ + FFN(...)，就绕过了第一条 residual 已写入主干的结果。</p></div></div>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">UML 风格组件图：谁拥有谁</h2>
-        <p><span class="term" data-definition="UML 组件图用盒子和包含关系表示系统由哪些部件组成、每个部件负责什么。这里不要求学习 UML 语法，只借它建立结构直觉。">UML 风格组件图</span>先回答结构问题：一个 layer 有四个直接子模块，而 Attention 与 FFN 内部还有自己的 projection。</p>
-        <div class="arch-diagram">
-          <div class="arch-zone">
-            <h4 class="arch-zone-label">TinyDecoderLayer</h4>
-            <div class="pattern-cards">
-              <div class="arch-component pattern-card" data-desc="第一条支路之前的 RMSNorm。它读取 x0，每个 token 独立归一化。"><div class="pattern-icon" style="background:var(--color-actor-1)">N₁</div><h4>input_norm</h4><p>[H] Parameter</p></div>
-              <div class="arch-component pattern-card" data-desc="唯一跨 token 的子模块。内部包含 q/k/v projection、RoPE、causal GQA、merge 和 o_proj。"><div class="pattern-icon" style="background:var(--color-actor-2)">A</div><h4>self_attn</h4><p>[B,S,H] → [B,S,H]</p></div>
-              <div class="arch-component pattern-card" data-desc="第二条支路之前的另一套 RMSNorm，拥有独立 weight，不能与 input_norm 视为同一个对象。"><div class="pattern-icon" style="background:var(--color-actor-3)">N₂</div><h4>post_attention_norm</h4><p>[H] Parameter</p></div>
-              <div class="arch-component pattern-card" data-desc="逐 token 的 gated FFN。内部执行 gate/up/mixed/down，临时把宽度 H 扩到 I，再压回 H。"><div class="pattern-icon" style="background:var(--color-actor-5)">F</div><h4>mlp</h4><p>H → I → H</p></div>
-            </div>
-          </div>
-          <div class="arch-description">点击任一组件，查看它在 layer 中的职责。</div>
-        </div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">固定一个能手工追踪的小配置</h2>
+        <h2 class="screen-heading">真实 forward 主干</h2>
         <div class="translation-block animate-in">
-          <div class="translation-code"><span class="translation-label">真实代码</span><pre><code><span class="code-line">batch, sequence, hidden = 1, 3, 4</span>
-<span class="code-line">num_query_heads, num_kv_heads, head_dim, intermediate = 2, 1, 2, 6</span></code></pre></div>
-          <div class="translation-english"><span class="translation-label">逐行翻译</span><div class="translation-lines">
-            <p class="tl">一次处理 1 条序列，里面有 3 个 token；主干中每个 token 有 4 个特征。</p>
-            <p class="tl">Q 有 2 个 head，K/V 共用 1 个 head；每个 head 有 2 个特征；FFN 临时宽度是 6。</p>
+          <div class="translation-code"><span class="translation-label">0009_explore_decoder_layer.py</span><pre><code><span class="code-line">residual_0 = hidden_states</span>
+<span class="code-line">attention_input = input_norm(residual_0)</span>
+<span class="code-line">attention_trace = attention.trace(attention_input, position_ids)</span>
+<span class="code-line">attention_output = attention_trace["output"]</span>
+<span class="code-line">hidden_after_attention = residual_0 + attention_output</span>
+<span class="code-line">residual_1 = hidden_after_attention</span>
+<span class="code-line">ffn_input = post_attention_norm(residual_1)</span>
+<span class="code-line">ffn_trace = mlp.trace(ffn_input)</span>
+<span class="code-line">ffn_output = ffn_trace["output"]</span>
+<span class="code-line">layer_output = residual_1 + ffn_output</span></code></pre></div>
+          <div class="translation-english"><span class="translation-label">逐行含义</span><div class="translation-lines">
+            <p class="tl">保存原始主干 x₀。</p><p class="tl">归一化副本进入 Attention。</p><p class="tl">保留 Attention 内部观察点。</p><p class="tl">取最终的 H 宽输出。</p><p class="tl">加回 x₀ 得到 x₁。</p><p class="tl">保存已经更新过的 x₁。</p><p class="tl">第二套 norm 读取 x₁。</p><p class="tl">保留 FFN 内部观察点。</p><p class="tl">取最终的 H 宽输出。</p><p class="tl">加回 x₁ 得到 x₂。</p>
           </div></div>
-        </div>
-        <div class="callout callout-accent"><div class="callout-icon">💡</div><div class="callout-content"><strong class="callout-title">接口比内部更重要</strong><p>Attention 内部可以拆成 heads，FFN 内部可以扩到 I；但两条支路返回 residual 主干前，都必须恢复为 [B,S,H]。</p></div></div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">先判断，再继续</h2>
-        <div class="quiz-container" id="quiz-m1">
-          <div class="quiz-question-block" data-correct="b" data-explanation-right="正确。固定 [B,S,H] 是 layer 可以堆叠、residual 可以逐元素相加的接口契约。" data-explanation-wrong="注意区分内部工作 shape 与 layer 对外接口。Nq、Nkv、D、I 都可以藏在 layer 内部。">
-            <h3 class="quiz-question">若 layer 输入为 [2,5,12]，哪一个输出 shape 能直接交给下一层？</h3>
-            <div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>[2,3,5,4]</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>[2,5,12]</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>[2,5,20]</span></button></div><div class="quiz-feedback"></div>
-          </div>
-          <button class="quiz-check-btn" onclick="checkQuiz('quiz-m1')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m1')">重试</button>
         </div>
       </section>
     </div>
@@ -126,239 +127,193 @@
 </section>
 <section class="module" id="module-2" style="background: var(--color-bg)">
   <div class="module-content">
-    <header class="module-header animate-in"><span class="module-number">02</span><h1 class="module-title">第一条路：Attention residual</h1><p class="module-subtitle">保存 x0，归一化副本，跨 token 计算，再把修正量加回 x0。</p></header>
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">第一条支路：Attention 的完整 shape 链</h1>
+      <p class="module-subtitle">重点不是重新学习 Attention，而是看清 raw、split、head 计算和 merge 分别处在哪个阶段。</p>
+    </header>
+
     <div class="module-body">
       <section class="screen animate-in">
-        <h2 class="screen-heading">点击“下一步”跟着数据走</h2>
-        <div class="flow-animation" data-steps='[
-          {"highlight":"flow-res0","label":"x0 同时成为主干 residual_0 和 norm 的输入"},
-          {"highlight":"flow-norm0","label":"input_norm 只在每个 token 的 H axis 上归一化","packet":true,"from":"res0","to":"norm0"},
-          {"highlight":"flow-attn0","label":"Attention 读取 norm 输出与 position_ids，完成 GQA 与 RoPE","packet":true,"from":"norm0","to":"attn0"},
-          {"highlight":"flow-add0","label":"Attention 输出回到 [B,S,H]，与保存的 x0 逐元素相加","packet":true,"from":"attn0","to":"add0"}
-        ]'>
-          <div class="flow-actors">
-            <div class="flow-actor" id="flow-res0"><div class="flow-actor-icon">x₀</div><span>residual_0<br>[B,S,H]</span></div>
-            <div class="flow-actor" id="flow-norm0"><div class="flow-actor-icon">N₁</div><span>input_norm<br>[B,S,H]</span></div>
-            <div class="flow-actor" id="flow-attn0"><div class="flow-actor-icon">A</div><span>self_attn<br>[B,S,H]</span></div>
-            <div class="flow-actor" id="flow-add0"><div class="flow-actor-icon">+</div><span>x₁<br>[B,S,H]</span></div>
-          </div>
-          <div class="flow-packet"></div><div class="flow-step-label">点击“下一步”开始</div>
-          <div class="flow-controls"><button class="btn flow-next-btn">下一步</button><button class="btn flow-reset-btn">重来</button><span class="flow-progress"></span></div>
-        </div>
+        <h2 class="screen-heading">从主干 H 宽，拆成 heads，再回到 H 宽</h2>
+        <svg viewBox="0 0 1120 310" role="img" aria-label="Attention 从 raw projection 到 split heads 再 merge 的 shape 数据流" style="width:100%;height:auto">
+          <defs><marker id="arrow-m2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2A7B9B"/></marker></defs>
+          <g font-size="13" text-anchor="middle">
+            <rect x="15" y="110" width="115" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="72" y="137" font-weight="800">attention_input</text><text x="72" y="160">[B,S,H]</text>
+            <rect x="165" y="25" width="145" height="65" rx="10" fill="#FDEEE9" stroke="#D94F30" stroke-width="3"/><text x="237" y="50" font-weight="800">q_raw</text><text x="237" y="73">[B,S,Nq×D]</text>
+            <rect x="165" y="120" width="145" height="65" rx="10" fill="#FFF7E4" stroke="#D4A843" stroke-width="3"/><text x="237" y="145" font-weight="800">k_raw</text><text x="237" y="168">[B,S,Nkv×D]</text>
+            <rect x="165" y="215" width="145" height="65" rx="10" fill="#E8F5EE" stroke="#2D8B55" stroke-width="3"/><text x="237" y="240" font-weight="800">v_raw</text><text x="237" y="263">[B,S,Nkv×D]</text>
+            <rect x="350" y="25" width="145" height="65" rx="10" fill="#FDEEE9" stroke="#D94F30" stroke-width="3"/><text x="422" y="50" font-weight="800">Q split</text><text x="422" y="73">[B,Nq,S,D]</text>
+            <rect x="350" y="120" width="145" height="65" rx="10" fill="#FFF7E4" stroke="#D4A843" stroke-width="3"/><text x="422" y="145" font-weight="800">K split</text><text x="422" y="168">[B,Nkv,S,D]</text>
+            <rect x="350" y="215" width="145" height="65" rx="10" fill="#E8F5EE" stroke="#2D8B55" stroke-width="3"/><text x="422" y="240" font-weight="800">V split</text><text x="422" y="263">[B,Nkv,S,D]</text>
+            <rect x="545" y="70" width="135" height="65" rx="10" fill="#fff" stroke="#7B6DAA" stroke-width="3"/><text x="612" y="95" font-weight="800">scores/weights</text><text x="612" y="118">[B,Nq,S,S]</text>
+            <rect x="545" y="175" width="135" height="65" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="612" y="200" font-weight="800">head output</text><text x="612" y="223">[B,Nq,S,D]</text>
+            <rect x="730" y="110" width="130" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="795" y="137" font-weight="800">merged</text><text x="795" y="160">[B,S,Nq×D]</text>
+            <rect x="910" y="110" width="175" height="70" rx="10" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="4"/><text x="997" y="137" font-weight="800">attention_output</text><text x="997" y="160">[B,S,H]</text>
+          </g>
+          <g fill="none" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m2)">
+            <path d="M130 145 C145 145 145 57 155 57"/><line x1="130" y1="145" x2="155" y2="152"/><path d="M130 145 C145 145 145 247 155 247"/>
+            <line x1="310" y1="57" x2="340" y2="57"/><line x1="310" y1="152" x2="340" y2="152"/><line x1="310" y1="247" x2="340" y2="247"/>
+            <line x1="495" y1="57" x2="535" y2="92"/><line x1="495" y1="152" x2="535" y2="112"/><line x1="495" y1="247" x2="535" y2="207"/>
+            <line x1="680" y1="207" x2="720" y2="160"/><line x1="860" y1="145" x2="900" y2="145"/>
+          </g>
+        </svg>
+        <p class="takeaway"><strong>显式 head axis</strong> 出现在 Q/K/V split、scores/weights 和 head output；raw projection、merged、attention_output 都没有独立 head axis。</p>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">真实代码逐行翻译</h2>
+        <h2 class="screen-heading">把通用公式代入本课数字</h2>
+        <div class="comparison-table"><table>
+          <thead><tr><th>阶段</th><th>通用 shape</th><th>B=1,S=3,H=4,Nq=2,Nkv=1,D=2</th><th>这一步做什么</th></tr></thead>
+          <tbody>
+            <tr><td>attention_input</td><td><code>[B,S,H]</code></td><td><code>[1,3,4]</code></td><td>主干接口</td></tr>
+            <tr><td>q_raw</td><td><code>[B,S,Nq×D]</code></td><td><code>[1,3,4]</code></td><td>q_proj 的扁平输出</td></tr>
+            <tr><td>k_raw / v_raw</td><td><code>[B,S,Nkv×D]</code></td><td><code>[1,3,2]</code></td><td>k_proj/v_proj 的扁平输出</td></tr>
+            <tr><td>Q split</td><td><code>[B,Nq,S,D]</code></td><td><code>[1,2,3,2]</code></td><td>建立 query head axis</td></tr>
+            <tr><td>K/V split</td><td><code>[B,Nkv,S,D]</code></td><td><code>[1,1,3,2]</code></td><td>保留较少 KV heads</td></tr>
+            <tr><td>scores / weights</td><td><code>[B,Nq,S,S]</code></td><td><code>[1,2,3,3]</code></td><td>每个 query head 的位置关系</td></tr>
+            <tr><td>head output</td><td><code>[B,Nq,S,D]</code></td><td><code>[1,2,3,2]</code></td><td>每个 query head 的结果</td></tr>
+            <tr><td>merged</td><td><code>[B,S,Nq×D]</code></td><td><code>[1,3,4]</code></td><td>head 特征重新拼接</td></tr>
+            <tr><td>attention_output</td><td><code>[B,S,H]</code></td><td><code>[1,3,4]</code></td><td>o_proj 后可与 x₀ 相加</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout-info"><div class="callout-icon">QK</div><div class="callout-content"><strong class="callout-title">RoPE 中间量属于 activation</strong><p><code>position_ids</code> 是运行输入；由它生成的 angles、cos、sin，以及旋转后的 Q/K，都是本次 forward 的 activation，不是 Parameter，也不是跨调用 state。</p></div></div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">为什么最终必须回到 H</h2>
+        <p><code>residual_0</code> 的 shape 是 <code>[B,S,H]</code>。逐元素相加要求 Attention 支路出口完全同形，因此 merge 后还要经过 <code>o_proj</code>，得到 <code>attention_output [B,S,H]</code>。</p>
         <div class="translation-block animate-in">
-          <div class="translation-code"><span class="translation-label">0009_explore_decoder_layer.py</span><pre><code><span class="code-line">residual_0 = hidden_states</span>
+          <div class="translation-code"><span class="translation-label">真实代码</span><pre><code><span class="code-line">residual_0 = hidden_states</span>
 <span class="code-line">attention_input = input_norm(residual_0)</span>
 <span class="code-line">attention_trace = attention.trace(attention_input, position_ids)</span>
 <span class="code-line">attention_output = attention_trace["output"]</span>
 <span class="code-line">hidden_after_attention = residual_0 + attention_output</span></code></pre></div>
-          <div class="translation-english"><span class="translation-label">数据依赖</span><div class="translation-lines">
-            <p class="tl">保留原始 x0；它是第一次 residual 的左边。</p><p class="tl">只把归一化后的副本交给 Attention。</p><p class="tl">Attention 同时需要位置编号，并返回所有内部观察点。</p><p class="tl">取出已经 merge + o_proj、宽度恢复为 H 的支路输出。</p><p class="tl">把修正量加回未归一化的 x0，得到 x1。</p>
-          </div></div>
+          <div class="translation-english"><span class="translation-label">shape 检查</span><div class="translation-lines"><p class="tl">x₀ 是 [B,S,H]。</p><p class="tl">norm 不改变 shape。</p><p class="tl">Attention 内部拆 head。</p><p class="tl">merge + o_proj 恢复 [B,S,H]。</p><p class="tl">同形后才能得到 x₁。</p></div></div>
         </div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">Attention 内部 shape 先拆开，再收回来</h2>
-        <svg viewBox="0 0 980 430" role="img" aria-label="Attention 内部 shape 数据流" style="width:100%;height:auto">
-          <defs><marker id="arrow-m2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2A7B9B"/></marker></defs>
-          <rect x="25" y="175" width="130" height="76" rx="12" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="90" y="205" text-anchor="middle" font-weight="700">norm(x₀)</text><text x="90" y="231" text-anchor="middle">[1,3,4]</text>
-          <line x1="155" y1="213" x2="205" y2="213" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m2)"/>
-          <rect x="215" y="48" width="160" height="78" rx="12" fill="#FDEEE9" stroke="#D94F30" stroke-width="3"/><text x="295" y="78" text-anchor="middle" font-weight="700">Q split</text><text x="295" y="105" text-anchor="middle">[1,2,3,2]</text>
-          <rect x="215" y="176" width="160" height="78" rx="12" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="3"/><text x="295" y="206" text-anchor="middle" font-weight="700">K split</text><text x="295" y="233" text-anchor="middle">[1,1,3,2]</text>
-          <rect x="215" y="304" width="160" height="78" rx="12" fill="#E8F5EE" stroke="#2D8B55" stroke-width="3"/><text x="295" y="334" text-anchor="middle" font-weight="700">V split</text><text x="295" y="361" text-anchor="middle">[1,1,3,2]</text>
-          <line x1="375" y1="87" x2="435" y2="145" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m2)"/><line x1="375" y1="215" x2="435" y2="175" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m2)"/><line x1="375" y1="343" x2="435" y2="275" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m2)"/>
-          <rect x="445" y="120" width="175" height="86" rx="12" fill="#fff" stroke="#7B6DAA" stroke-width="3"/><text x="532" y="150" text-anchor="middle" font-weight="700">RoPE + scores</text><text x="532" y="178" text-anchor="middle">weights [1,2,3,3]</text>
-          <rect x="445" y="240" width="175" height="78" rx="12" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="532" y="270" text-anchor="middle" font-weight="700">weights @ V</text><text x="532" y="297" text-anchor="middle">[1,2,3,2]</text>
-          <line x1="620" y1="279" x2="680" y2="230" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m2)"/>
-          <rect x="690" y="174" width="120" height="76" rx="12" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="750" y="204" text-anchor="middle" font-weight="700">merge</text><text x="750" y="231" text-anchor="middle">[1,3,4]</text>
-          <line x1="810" y1="212" x2="850" y2="212" stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m2)"/>
-          <rect x="860" y="174" width="105" height="76" rx="12" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="4"/><text x="912" y="204" text-anchor="middle" font-weight="700">o_proj</text><text x="912" y="231" text-anchor="middle">[1,3,4]</text>
-        </svg>
-        <div class="callout callout-info"><div class="callout-icon">↩</div><div class="callout-content"><strong class="callout-title">为什么能 residual add</strong><p>显式 head axis 只存在于 Attention 内部；merge 和 o_proj 把结果恢复到主干接口 [B,S,H]。</p></div></div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">找出最危险的写法</h2>
-        <div class="quiz-container" id="quiz-m2"><div class="quiz-question-block" data-correct="c" data-explanation-right="正确。pre-norm 的 residual 保存原始 x0；norm(x0) 只进入支路。" data-explanation-wrong="再看动画的分叉点：x0 一条路被保存，一条路进入 input_norm。">
-          <h3 class="quiz-question">哪一个公式正确描述第一次 residual？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x1 = norm(x0) + attention(x0)</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x1 = attention(norm(x0))</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x1 = x0 + attention(norm(x0))</span></button></div><div class="quiz-feedback"></div>
-        </div><button class="quiz-check-btn" onclick="checkQuiz('quiz-m2')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m2')">重试</button></div>
       </section>
     </div>
   </div>
 </section>
 <section class="module" id="module-3" style="background: var(--color-bg-warm)">
   <div class="module-content">
-    <header class="module-header animate-in"><span class="module-number">03</span><h1 class="module-title">第二条路：FFN residual</h1><p class="module-subtitle">Attention 已经写进 x1；FFN 必须读取并更新 x1，不能跳回 x0。</p></header>
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">第二条支路：FFN 更新已经包含 Attention 的 x₁</h1>
+      <p class="module-subtitle">这一部分只需要看清两个问题：FFN 内部何时扩到 I，以及第二次 residual 为什么必须保存 x₁。</p>
+    </header>
+
     <div class="module-body">
       <section class="screen animate-in">
-        <h2 class="screen-heading">让组件自己“说”出数据依赖</h2>
-        <div class="chat-window" id="chat-ffn-residual">
-          <div class="chat-messages">
-            <div class="chat-message" data-msg="0" data-sender="x1" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-2)">x₁</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-2)">Residual Stream x1</span><p>我已经包含 x0 与 Attention 更新。请保存我的原值作为 residual_1。</p></div></div>
-            <div class="chat-message" data-msg="1" data-sender="norm2" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-3)">N₂</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-3)">post_attention_norm</span><p>我读取 x1，每个 token 独立归一化，shape 仍是 [B,S,H]。</p></div></div>
-            <div class="chat-message" data-msg="2" data-sender="mlp" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-5)">F</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-5)">Gated FFN</span><p>我把 H 临时扩到 I，完成 gate × up，再用 down_proj 返回 H。</p></div></div>
-            <div class="chat-message" data-msg="3" data-sender="x1" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-2)">x₁</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-2)">Residual Stream x1</span><p>你的 H 宽修正量可以加给我。结果 x2 会交给下一层。</p></div></div>
-          </div>
-          <div class="chat-typing" style="display:none"><div class="chat-avatar" id="chat-ffn-residual-typing-avatar">?</div><div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div></div>
-          <div class="chat-controls"><button class="btn chat-next-btn">下一条</button><button class="btn chat-all-btn">播放全部</button><button class="btn chat-reset-btn">重播</button><span class="chat-progress"></span></div>
+        <h2 class="screen-heading">FFN 内部是 H → I → H</h2>
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">H</div><p><strong>ffn_input</strong><br>[B,S,H]<br>本例 [1,3,4]</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">I</div><p><strong>gate_raw / up</strong><br>[B,S,I]<br>本例 [1,3,6]</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">I</div><p><strong>SiLU(gate) × up</strong><br>mixed [B,S,I]<br>本例 [1,3,6]</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">H</div><p><strong>down_proj</strong><br>ffn_output [B,S,H]<br>本例 [1,3,4]</p></div>
         </div>
+        <p class="takeaway"><code>I</code> 只是 FFN 的内部工作宽度。支路出口必须由 <code>down_proj</code> 压回 <code>H</code>，才能与 <code>residual_1 [B,S,H]</code> 相加。</p>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">为什么是 x1 + FFN，而不是 x0 + FFN</h2>
-        <svg viewBox="0 0 940 310" role="img" aria-label="两次 residual 形成串行依赖" style="width:100%;height:auto">
-          <defs><marker id="arrow-m3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2A7B9B"/></marker></defs>
-          <rect x="30" y="105" width="120" height="72" rx="12" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="90" y="135" text-anchor="middle" font-weight="700">x₀</text><text x="90" y="160" text-anchor="middle">[B,S,H]</text>
-          <line x1="150" y1="141" x2="215" y2="141" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m3)"/>
-          <rect x="225" y="70" width="180" height="142" rx="16" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="4"/><text x="315" y="108" text-anchor="middle" font-weight="800">Attention branch</text><text x="315" y="140" text-anchor="middle">norm → GQA → o_proj</text><text x="315" y="178" text-anchor="middle" font-weight="700">x₁ = x₀ + attn</text>
-          <line x1="405" y1="141" x2="470" y2="141" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m3)"/>
-          <rect x="480" y="70" width="180" height="142" rx="16" fill="#E8F5EE" stroke="#2D8B55" stroke-width="4"/><text x="570" y="108" text-anchor="middle" font-weight="800">FFN branch</text><text x="570" y="140" text-anchor="middle">norm → H→I→H</text><text x="570" y="178" text-anchor="middle" font-weight="700">x₂ = x₁ + ffn</text>
-          <line x1="660" y1="141" x2="725" y2="141" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m3)"/>
-          <rect x="735" y="105" width="170" height="72" rx="12" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="820" y="135" text-anchor="middle" font-weight="700">下一 decoder layer</text><text x="820" y="160" text-anchor="middle">继续读取 x₂</text>
-          <path d="M90,190 C90,270 315,270 315,220" fill="none" stroke="#D94F30" stroke-width="3" stroke-dasharray="8 5"/><text x="200" y="292" text-anchor="middle" fill="#D94F30">residual_0 保存 x₀</text>
-          <path d="M420,220 C420,270 570,270 570,220" fill="none" stroke="#7B6DAA" stroke-width="3" stroke-dasharray="8 5"/><text x="495" y="292" text-anchor="middle" fill="#7B6DAA">residual_1 保存 x₁</text>
-        </svg>
-        <div class="callout callout-warning"><div class="callout-icon">!</div><div class="callout-content"><strong class="callout-title">常见断路</strong><p>若第二次相加错误使用 x0，Attention 写入 x1 的更新不会沿主干直接传给下一层。</p></div></div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">真实代码与 shape 翻译</h2>
+        <h2 class="screen-heading">第二次 residual 的基线是 x₁</h2>
         <div class="translation-block animate-in">
-          <div class="translation-code"><span class="translation-label">0009_explore_decoder_layer.py</span><pre><code><span class="code-line">residual_1 = hidden_after_attention</span>
+          <div class="translation-code"><span class="translation-label">真实代码</span><pre><code><span class="code-line">residual_1 = hidden_after_attention</span>
 <span class="code-line">ffn_input = post_attention_norm(residual_1)</span>
 <span class="code-line">ffn_trace = mlp.trace(ffn_input)</span>
 <span class="code-line">ffn_output = ffn_trace["output"]</span>
 <span class="code-line">layer_output = residual_1 + ffn_output</span></code></pre></div>
-          <div class="translation-english"><span class="translation-label">逐行翻译</span><div class="translation-lines"><p class="tl">保存已经包含 Attention 的 x1。</p><p class="tl">第二套 norm 读取 x1，shape 仍是 [B,S,H]。</p><p class="tl">FFN 内部产生 gate/up/mixed [B,S,I]。</p><p class="tl">down_proj 把支路压回 [B,S,H]。</p><p class="tl">把 FFN 修正量加回 x1，得到最终 x2。</p></div></div>
+          <div class="translation-english"><span class="translation-label">数据依赖</span><div class="translation-lines"><p class="tl">保存 x₁，它已经包含 x₀ 与 Attention 更新。</p><p class="tl">第二套 RMSNorm 读取 x₁。</p><p class="tl">FFN 在每个 token 内部独立计算。</p><p class="tl">down_proj 给出 H 宽修正量。</p><p class="tl">把修正量加回 x₁，得到 x₂。</p></div></div>
         </div>
+        <div class="callout callout-warning"><div class="callout-icon">≠</div><div class="callout-content"><strong class="callout-title">不能写成 x₀ + ffn_output</strong><p><code>x₀</code> 不包含第一条支路的结果；第二次相加跳回 x₀，会切断 layer 的串行主干。</p></div></div>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">FFN 的 H → I → H 像临时工作台</h2>
-        <div class="flow-steps"><div class="flow-step"><div class="flow-step-num">H</div><p>ffn_input<br>[1,3,4]</p></div><div class="flow-arrow">→</div><div class="flow-step"><div class="flow-step-num">I</div><p>gate / up / mixed<br>[1,3,6]</p></div><div class="flow-arrow">→</div><div class="flow-step"><div class="flow-step-num">H</div><p>down_proj output<br>[1,3,4]</p></div><div class="flow-arrow">→</div><div class="flow-step"><div class="flow-step-num">+</div><p>与 x1 相加<br>得到 x2</p></div></div>
-        <p>中间的 I 只是 <span class="term" data-definition="Intermediate size 是 FFN 内部临时扩展的特征宽度。它不属于 residual stream 的对外接口。">intermediate size</span>，必须在支路出口处消失。</p>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">应用题</h2>
-        <div class="quiz-container" id="quiz-m3"><div class="quiz-question-block" data-correct="b" data-explanation-right="正确。第二个 residual 的基线是 x1，因为 FFN 支路是在 Attention 已更新后的主干上继续工作。" data-explanation-wrong="把时间顺序画出来：x0 经过第一条支路成为 x1，第二条支路只能从 x1 继续。"><h3 class="quiz-question">若 FFN 输出为 f，哪个式子不会丢掉第一条支路的主干更新？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x2 = x0 + f</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x2 = x1 + f</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x2 = norm(x1) + f</span></button></div><div class="quiz-feedback"></div></div><button class="quiz-check-btn" onclick="checkQuiz('quiz-m3')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m3')">重试</button></div>
+        <h2 class="screen-heading">用一个 token 检查数据，而不是背小数</h2>
+        <div class="comparison-table"><table>
+          <thead><tr><th>对象</th><th>token 1 的四个特征</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td><code>x₀</code></td><td><code>[2.0000, 0.0000, 1.0000, 3.0000]</code></td><td>进入 layer 的主干</td></tr>
+            <tr><td>Attention branch</td><td><code>[0.0018, 0.0046, 0.0073, 0.0101]</code></td><td>第一条支路修正量</td></tr>
+            <tr><td><code>x₁</code></td><td><code>[2.0018, 0.0046, 1.0073, 3.0101]</code></td><td>x₀ + Attention branch</td></tr>
+            <tr><td>FFN branch</td><td><code>[0.0003, 0.0008, 0.0012, 0.0016]</code></td><td>第二条支路修正量</td></tr>
+            <tr><td><code>x₂</code></td><td><code>[2.0022, 0.0053, 1.0085, 3.0116]</code></td><td>x₁ + FFN branch</td></tr>
+          </tbody>
+        </table></div>
+        <p>这些数值只用于验证加法关系。需要长期记住的是 <code>x₀ → x₁ → x₂</code>，不是四位小数。</p>
       </section>
     </div>
   </div>
 </section>
 <section class="module" id="module-4" style="background: var(--color-bg)">
   <div class="module-content">
-    <header class="module-header animate-in"><span class="module-number">04</span><h1 class="module-title">Shape 与 token 依赖，一张图看全</h1><p class="module-subtitle">shape 回到 H 解决“能不能相加”，causal dependency 解决“谁会影响谁”。</p></header>
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">因果性、对象生命周期与执行阶段</h1>
+      <p class="module-subtitle">最后把“谁能影响谁”和“哪些数据保存多久”分清；这两件事不能只靠 shape 判断。</p>
+    </header>
+
     <div class="module-body">
       <section class="screen animate-in">
-        <h2 class="screen-heading">完整 shape 泳道图</h2>
-        <svg viewBox="0 0 980 610" role="img" aria-label="Decoder layer 完整 shape 泳道图" style="width:100%;height:auto">
-          <defs><marker id="arrow-m4" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2A7B9B"/></marker></defs>
-          <rect x="20" y="20" width="940" height="260" rx="18" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="2"/><text x="45" y="55" font-size="20" font-weight="800">Attention 支路</text>
-          <rect x="20" y="310" width="940" height="260" rx="18" fill="#E8F5EE" stroke="#2D8B55" stroke-width="2"/><text x="45" y="345" font-size="20" font-weight="800">FFN 支路</text>
-          <g font-size="14" text-anchor="middle"><rect x="55" y="105" width="120" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="115" y="134" font-weight="700">x₀ / norm</text><text x="115" y="158">[B,S,H]</text>
-          <rect x="220" y="75" width="145" height="70" rx="10" fill="#fff" stroke="#D94F30" stroke-width="3"/><text x="292" y="104" font-weight="700">Q</text><text x="292" y="128">[B,Nq,S,D]</text><rect x="220" y="165" width="145" height="70" rx="10" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="292" y="194" font-weight="700">K / V</text><text x="292" y="218">[B,Nkv,S,D]</text>
-          <rect x="410" y="105" width="145" height="70" rx="10" fill="#fff" stroke="#7B6DAA" stroke-width="3"/><text x="482" y="134" font-weight="700">weights</text><text x="482" y="158">[B,Nq,S,S]</text>
-          <rect x="600" y="105" width="145" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="672" y="134" font-weight="700">head output</text><text x="672" y="158">[B,Nq,S,D]</text>
-          <rect x="790" y="105" width="130" height="70" rx="10" fill="#fff" stroke="#2A7B9B" stroke-width="4"/><text x="855" y="134" font-weight="700">x₁</text><text x="855" y="158">[B,S,H]</text>
-          <rect x="55" y="395" width="140" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="3"/><text x="125" y="424" font-weight="700">x₁ / norm</text><text x="125" y="448">[B,S,H]</text>
-          <rect x="285" y="395" width="165" height="70" rx="10" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="367" y="424" font-weight="700">gate / up / mixed</text><text x="367" y="448">[B,S,I]</text>
-          <rect x="540" y="395" width="150" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="3"/><text x="615" y="424" font-weight="700">down_proj</text><text x="615" y="448">[B,S,H]</text>
-          <rect x="790" y="395" width="130" height="70" rx="10" fill="#fff" stroke="#2D8B55" stroke-width="4"/><text x="855" y="424" font-weight="700">x₂</text><text x="855" y="448">[B,S,H]</text></g>
-          <g stroke="#2A7B9B" stroke-width="3" marker-end="url(#arrow-m4)"><line x1="175" y1="140" x2="210" y2="110"/><line x1="175" y1="140" x2="210" y2="200"/><line x1="365" y1="110" x2="400" y2="140"/><line x1="365" y1="200" x2="400" y2="150"/><line x1="555" y1="140" x2="590" y2="140"/><line x1="745" y1="140" x2="780" y2="140"/></g>
-          <g stroke="#2D8B55" stroke-width="3" marker-end="url(#arrow-m4)"><line x1="195" y1="430" x2="275" y2="430"/><line x1="450" y1="430" x2="530" y2="430"/><line x1="690" y1="430" x2="780" y2="430"/></g>
-          <line x1="855" y1="175" x2="855" y2="385" stroke="#7B6DAA" stroke-width="4" marker-end="url(#arrow-m4)"/><text x="875" y="290" fill="#7B6DAA" font-weight="700">x₁ 进入第二支路</text>
+        <h2 class="screen-heading">只有 Attention 会跨 token 读取</h2>
+        <p>矩阵的行是 query 位置，列是允许读取的 key/value 位置。绿色表示可以读取，灰色表示被 causal mask 屏蔽。</p>
+        <svg viewBox="0 0 720 430" role="img" aria-label="长度 3 的 causal attention token 依赖矩阵" style="width:100%;height:auto;max-width:720px;display:block;margin:auto">
+          <g font-size="18" text-anchor="middle"><text x="380" y="35" font-weight="800">Key / Value position</text><text x="55" y="230" transform="rotate(-90 55 230)" font-weight="800">Query position</text>
+          <text x="260" y="85">0</text><text x="390" y="85">1</text><text x="520" y="85">2</text><text x="135" y="155">0</text><text x="135" y="265">1</text><text x="135" y="375">2</text></g>
+          <g stroke="#fff" stroke-width="5"><rect x="195" y="100" width="130" height="100" fill="#2D8B55"/><rect x="325" y="100" width="130" height="100" fill="#D9D4CC"/><rect x="455" y="100" width="130" height="100" fill="#D9D4CC"/><rect x="195" y="200" width="130" height="100" fill="#2D8B55"/><rect x="325" y="200" width="130" height="100" fill="#2D8B55"/><rect x="455" y="200" width="130" height="100" fill="#D9D4CC"/><rect x="195" y="300" width="130" height="100" fill="#2D8B55"/><rect x="325" y="300" width="130" height="100" fill="#2D8B55"/><rect x="455" y="300" width="130" height="100" fill="#2D8B55"/></g>
+          <g fill="#fff" font-size="16" text-anchor="middle" font-weight="700"><text x="260" y="158">可读</text><text x="260" y="258">可读</text><text x="390" y="258">可读</text><text x="260" y="358">可读</text><text x="390" y="358">可读</text><text x="520" y="358">可读</text></g>
+          <g fill="#6B6560" font-size="15" text-anchor="middle"><text x="390" y="158">未来</text><text x="520" y="158">未来</text><text x="520" y="258">未来</text></g>
         </svg>
+        <div class="comparison-table"><table>
+          <thead><tr><th>组件</th><th>是否主动跨 token</th><th>原因</th></tr></thead>
+          <tbody><tr><td>RMSNorm</td><td>否</td><td>每个 token 只在自己的 H axis 上求均方</td></tr><tr><td>Attention</td><td>是</td><td>一个 query 会读取 causal mask 允许的历史 K/V</td></tr><tr><td>FFN</td><td>否</td><td>对每个 token 独立执行 H→I→H</td></tr><tr><td>Residual add</td><td>否</td><td>相同 token、相同 feature 逐元素相加</td></tr></tbody>
+        </table></div>
+        <p class="takeaway">只修改最后一个 token，位置 0～倒数第二个位置的最终输出必须不变；只修改 token 0，后面的 token 可能通过 Attention 受到影响。</p>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">token 依赖图：只有 Attention 打开横向通道</h2>
-        <p>下图中行是 query 位置，列是它允许读取的 key/value 位置。绿色格表示允许，灰色格表示 causal mask 屏蔽。</p>
-        <svg viewBox="0 0 700 420" role="img" aria-label="长度 3 序列的 causal attention 依赖矩阵" style="width:100%;height:auto;max-width:700px;display:block;margin:auto">
-          <g font-size="18" text-anchor="middle"><text x="350" y="35" font-weight="800">Key / Value position</text><text x="55" y="220" transform="rotate(-90 55 220)" font-weight="800">Query position</text>
-          <text x="240" y="85">0</text><text x="370" y="85">1</text><text x="500" y="85">2</text><text x="115" y="150">0</text><text x="115" y="260">1</text><text x="115" y="370">2</text></g>
-          <g stroke="#fff" stroke-width="5"><rect x="175" y="100" width="130" height="100" fill="#2D8B55"/><rect x="305" y="100" width="130" height="100" fill="#D9D4CC"/><rect x="435" y="100" width="130" height="100" fill="#D9D4CC"/><rect x="175" y="200" width="130" height="100" fill="#2D8B55"/><rect x="305" y="200" width="130" height="100" fill="#2D8B55"/><rect x="435" y="200" width="130" height="100" fill="#D9D4CC"/><rect x="175" y="300" width="130" height="100" fill="#2D8B55"/><rect x="305" y="300" width="130" height="100" fill="#2D8B55"/><rect x="435" y="300" width="130" height="100" fill="#2D8B55"/></g>
-          <g fill="#fff" font-size="16" text-anchor="middle" font-weight="700"><text x="240" y="155">可读</text><text x="240" y="255">可读</text><text x="370" y="255">可读</text><text x="240" y="355">可读</text><text x="370" y="355">可读</text><text x="500" y="355">可读</text></g>
-          <g fill="#6B6560" font-size="15" text-anchor="middle"><text x="370" y="155">未来</text><text x="500" y="155">未来</text><text x="500" y="255">未来</text></g>
-        </svg>
-        <div class="pattern-cards"><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-1)">N</div><h4>RMSNorm</h4><p>每行 token 单独处理 H。</p></div><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-2)">A</div><h4>Attention</h4><p>按绿色格跨位置汇集。</p></div><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-5)">F</div><h4>FFN</h4><p>每行 token 单独做 H→I→H。</p></div><div class="pattern-card"><div class="pattern-icon" style="background:var(--color-actor-4)">+</div><h4>Residual</h4><p>同位置、同 feature 相加。</p></div></div>
+        <h2 class="screen-heading">Parameter、运行输入、activation、state</h2>
+        <div class="comparison-table"><table>
+          <thead><tr><th>类别</th><th>本层对象</th><th>保存多久</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Parameter</strong></td><td>两个 RMSNorm weight；q/k/v/o projection weight；gate/up/down projection weight</td><td>随模型 checkpoint 保存</td></tr>
+            <tr><td><strong>运行输入</strong></td><td><code>hidden_states</code>、<code>position_ids</code></td><td>每次 forward 由调用方提供</td></tr>
+            <tr><td><strong>Activation</strong></td><td>norm 输出、q/k/v raw、Q/K/V、angles、cos/sin、scores/weights、两个 residual、gate/up/mixed、x₁/x₂</td><td>服务当前 forward；是否为 backward 保留由执行模式决定</td></tr>
+            <tr><td><strong>请求 state</strong></td><td>0009 的 full-sequence forward 没有；0010 才加入历史 <code>K_rope</code> 与 <code>V Cache</code></td><td>跨 decode steps 保留</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout-info"><div class="callout-icon">≠</div><div class="callout-content"><strong class="callout-title">shape 不能决定生命周期</strong><p>当前 forward 中的 K/V 是 activation；相同内容在增量 decode 中被保存到 Cache 后，才成为请求 state。</p></div></div>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">真实因果测试翻译</h2>
-        <div class="translation-block animate-in"><div class="translation-code"><span class="translation-label">0009_explore_decoder_layer.py</span><pre><code><span class="code-line">changed = hidden_states.clone()</span>
-<span class="code-line">changed[:, 2, :] += 1000</span>
-<span class="code-line">changed_attn_input = input_norm(changed)</span>
-<span class="code-line">changed_attn_output = attention(changed_attn_input, position_ids)</span>
-<span class="code-line">changed_x1 = changed + changed_attn_output</span>
-<span class="code-line">changed_output = changed_x1 + mlp(post_attention_norm(changed_x1))</span></code></pre></div><div class="translation-english"><span class="translation-label">实验含义</span><div class="translation-lines"><p class="tl">复制输入，避免修改原始证据。</p><p class="tl">只破坏最后的未来 token。</p><p class="tl">按真实顺序重新执行 norm。</p><p class="tl">重新执行唯一会跨 token 的 Attention。</p><p class="tl">完成第一次 residual。</p><p class="tl">完成第二支路，最后比较更早位置是否保持不变。</p></div></div></div>
+        <h2 class="screen-heading">full-sequence、prefill、单步 decode 的 S</h2>
+        <div class="comparison-table"><table>
+          <thead><tr><th>阶段</th><th>当前输入的 S</th><th>历史 K/V Cache</th><th>本课边界</th></tr></thead>
+          <tbody>
+            <tr><td><strong>full-sequence</strong></td><td>整段序列长度，例如 S=5</td><td>本课不跨调用保存</td><td>0009 实际执行路径</td></tr>
+            <tr><td><strong>prefill</strong></td><td>prompt 长度，通常 S&gt;1</td><td>计算并建立初始 K/V Cache</td><td>只复习概念，不在 0009 实现</td></tr>
+            <tr><td><strong>单步 decode</strong></td><td>通常 S=1，即本步新 token</td><td>读取历史 Cache，并追加本步 K/V</td><td>0010 才实现</td></tr>
+          </tbody>
+        </table></div>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">迁移题</h2>
-        <div class="quiz-container" id="quiz-m4"><div class="quiz-question-block" data-correct="a" data-explanation-right="正确。未来位置 4 被 causal mask 屏蔽；其余组件也不跨 token，所以 0..3 不应变化。" data-explanation-wrong="先问唯一跨 token 的组件是谁，再查 causal 矩阵中更早 query 是否能读取位置 4。"><h3 class="quiz-question">长度 5 的序列只修改 token 4，哪些最终输出必须保持不变？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>位置 0、1、2、3</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>只有位置 0</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>没有任何位置</span></button></div><div class="quiz-feedback"></div></div><button class="quiz-check-btn" onclick="checkQuiz('quiz-m4')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m4')">重试</button></div>
+        <h2 class="screen-heading">三道迁移题：检查是否能进入作业</h2>
+        <div class="quiz-container" id="quiz-final">
+          <div class="quiz-question-block" data-correct="b" data-explanation-right="正确。k_proj 输出宽度是 Nkv×D=1×4=4，因此 k_raw 是 [2,5,4]。" data-explanation-wrong="raw 阶段还没有显式 head axis；先算输出宽度 Nkv×D。"><h3 class="quiz-question">给定 B=2,S=5,Nkv=1,D=4，k_raw 的 shape 是什么？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>[2,1,5,4]</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>[2,5,4]</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>[2,5,12]</span></button></div><div class="quiz-feedback"></div></div>
+          <div class="quiz-question-block" data-correct="a" data-explanation-right="正确。更早 query 不能读取未来位置 4，其他组件也不跨 token。" data-explanation-wrong="先找唯一跨 token 的 Attention，再看 causal mask 是否允许早期 query 读取位置 4。"><h3 class="quiz-question">长度 5 的序列只修改 token 4，哪些最终输出必须保持不变？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>位置 0～3</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>只有位置 0</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>所有位置</span></button></div><div class="quiz-feedback"></div></div>
+          <div class="quiz-question-block" data-correct="c" data-explanation-right="正确。单步 decode 的当前输入通常 S=1，历史 K_rope/V Cache 才是跨步 state。" data-explanation-wrong="区分当前输入长度与历史上下文长度：历史上下文在 Cache 中，不在当前 S 中。"><h3 class="quiz-question">单步 decode 时，哪组描述正确？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>S=历史长度；Q 是 state</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>S=prompt 长度；cos/sin 是 state</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>S=1；历史 K/V Cache 是 state</span></button></div><div class="quiz-feedback"></div></div>
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-final')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-final')">重试</button>
+        </div>
       </section>
     </div>
   </div>
 </section>
-<section class="module" id="module-5" style="background: var(--color-bg-warm)">
-  <div class="module-content">
-    <header class="module-header animate-in"><span class="module-number">05</span><h1 class="module-title">调试、生命周期与提交</h1><p class="module-subtitle">学会用三个不变量定位组装错误，而不是盯着一大串浮点数猜。</p></header>
-    <div class="module-body">
-      <section class="screen animate-in">
-        <h2 class="screen-heading">四类对象不要混</h2>
-        <div class="pattern-cards stagger-children">
-          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-1)"><div class="pattern-icon" style="background:var(--color-actor-1)">P</div><h4>Parameter</h4><p>两个 norm weight；q/k/v/o；gate/up/down projection weight。保存在 checkpoint。</p></div>
-          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-2)"><div class="pattern-icon" style="background:var(--color-actor-2)">IN</div><h4>运行输入</h4><p>hidden_states 与 position_ids。每次 forward 由调用方提供。</p></div>
-          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-4)"><div class="pattern-icon" style="background:var(--color-actor-4)">A</div><h4>Activation</h4><p>norm 输出、Q/K/V、weights、branch 输出、x1/x2。只服务本次计算。</p></div>
-          <div class="pattern-card animate-in" style="border-top:3px solid var(--color-actor-5)"><div class="pattern-icon" style="background:var(--color-actor-5)">S</div><h4>请求 State</h4><p>0009 没有。0010 才保存跨 decode step 的历史 K_rope 与 V Cache。</p></div>
-        </div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">三个不变量像三只电表</h2>
-        <div class="icon-rows">
-          <div class="icon-row"><div class="icon-circle" style="background:var(--color-actor-2)">①</div><div><strong>Shape 电表</strong><p>layer 输入输出必须相同：[B,S,H]。若相加失败，沿支路向前找哪个出口没回到 H。</p></div></div>
-          <div class="icon-row"><div class="icon-circle" style="background:var(--color-actor-5)">②</div><div><strong>Identity 电表</strong><p>把 o_proj 与 down_proj 置零，两条支路都应输出零，整个 layer 必须原样返回输入。</p></div></div>
-          <div class="icon-row"><div class="icon-circle" style="background:var(--color-actor-1)">③</div><div><strong>Causal 电表</strong><p>只改未来 token，更早输出必须不变；否则优先检查 mask、S axis 或数据依赖。</p></div></div>
-        </div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">Identity 测试为什么有效</h2>
-        <div class="translation-block animate-in"><div class="translation-code"><span class="translation-label">0009_tiny_decoder_layer.py</span><pre><code><span class="code-line">zero_layer = TinyDecoderLayer(**config).to(device)</span>
-<span class="code-line">with torch.no_grad():</span>
-<span class="code-line">    zero_layer.self_attn.o_proj.weight.zero_()</span>
-<span class="code-line">    zero_layer.mlp.down_proj.weight.zero_()</span>
-<span class="code-line">torch.testing.assert_close(zero_layer(hidden_states, position_ids), hidden_states)</span></code></pre></div><div class="translation-english"><span class="translation-label">测试推理</span><div class="translation-lines"><p class="tl">建立一个结构完整的新 layer。</p><p class="tl">关闭梯度追踪，只修改测试权重。</p><p class="tl">让 Attention 支路的最终出口恒为零。</p><p class="tl">让 FFN 支路的最终出口恒为零。</p><p class="tl">两次 residual 都只加零，因此输出必须严格回到输入。</p></div></div></div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">从阅读到提交的闭环</h2>
-        <div class="step-cards">
-          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>运行可视化与 notebook</strong><p>先用图建立全局模型，再逐个执行 tensor 实验。</p></div></div>
-          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>运行引导 trace</strong><p>把终端输出与 shape 泳道图逐项对应。</p></div></div>
-          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>独立完成四个 TODO</strong><p>只组装 module 与两条 residual，不重写已通过组件。</p></div></div>
-          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>关闭资料完成闭卷题</strong><p>迁移到 B=2,S=5,H=12,Nq=3,Nkv=1,D=4,I=20。</p></div></div>
-        </div>
-        <div class="badge-list" style="margin-top:1.5rem"><div class="badge-item"><code class="badge-code">Notebook</code><span class="badge-desc">打开可执行实验</span></div><div class="badge-item"><code class="badge-code">Guided</code><span class="badge-desc">运行引导脚本</span></div><div class="badge-item"><code class="badge-code">TODO</code><span class="badge-desc">完成独立作业</span></div><div class="badge-item"><code class="badge-code">Exam</code><span class="badge-desc">完成闭卷测试</span></div></div>
-        <p class="takeaway" style="margin-top:1rem">页面末尾的“继续学习”区域提供这些文件的可点击入口。</p>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">最后一题：根据症状定位层级</h2>
-        <div class="quiz-container" id="quiz-m5"><div class="quiz-question-block" data-correct="c" data-explanation-right="正确。两个支路出口为零时，正确 residual 组装必然是 identity；失败说明 residual 基线或加法顺序错误。" data-explanation-wrong="这个测试已经让 Attention/FFN 的最终支路输出变成零，因此不需要先怀疑 RoPE 或 softmax 数值。"><h3 class="quiz-question">o_proj 和 down_proj 都置零后，输出仍不等于输入。最先检查什么？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>RoPE 的 base</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>softmax 精度</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>residual 保存对象与加法顺序</span></button></div><div class="quiz-feedback"></div></div><button class="quiz-check-btn" onclick="checkQuiz('quiz-m5')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m5')">重试</button></div>
-        <p style="margin-top:2rem">核实来源：<a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html">PyTorch nn.Module</a>；<a href="https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py">Qwen3 modeling source</a>。</p>
-      </section>
-    </div>
-  </div>
-</section>
-    <section class="module" id="continue-learning">
-      <div class="module-inner">
+    <section class="screen" id="continue-learning" style="max-width:800px;margin:4rem auto">
+      <div class="module-content">
         <p class="eyebrow">CONTINUE LEARNING</p>
         <h2>把图上的路径变成你能运行、修改和解释的代码</h2>
         <div class="badge-list">

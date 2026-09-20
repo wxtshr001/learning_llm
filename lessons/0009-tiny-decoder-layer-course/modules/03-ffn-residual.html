@@ -1,59 +1,52 @@
 <section class="module" id="module-3" style="background: var(--color-bg-warm)">
   <div class="module-content">
-    <header class="module-header animate-in"><span class="module-number">03</span><h1 class="module-title">第二条路：FFN residual</h1><p class="module-subtitle">Attention 已经写进 x1；FFN 必须读取并更新 x1，不能跳回 x0。</p></header>
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">第二条支路：FFN 更新已经包含 Attention 的 x₁</h1>
+      <p class="module-subtitle">这一部分只需要看清两个问题：FFN 内部何时扩到 I，以及第二次 residual 为什么必须保存 x₁。</p>
+    </header>
+
     <div class="module-body">
       <section class="screen animate-in">
-        <h2 class="screen-heading">让组件自己“说”出数据依赖</h2>
-        <div class="chat-window" id="chat-ffn-residual">
-          <div class="chat-messages">
-            <div class="chat-message" data-msg="0" data-sender="x1" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-2)">x₁</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-2)">Residual Stream x1</span><p>我已经包含 x0 与 Attention 更新。请保存我的原值作为 residual_1。</p></div></div>
-            <div class="chat-message" data-msg="1" data-sender="norm2" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-3)">N₂</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-3)">post_attention_norm</span><p>我读取 x1，每个 token 独立归一化，shape 仍是 [B,S,H]。</p></div></div>
-            <div class="chat-message" data-msg="2" data-sender="mlp" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-5)">F</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-5)">Gated FFN</span><p>我把 H 临时扩到 I，完成 gate × up，再用 down_proj 返回 H。</p></div></div>
-            <div class="chat-message" data-msg="3" data-sender="x1" style="display:none"><div class="chat-avatar" style="background:var(--color-actor-2)">x₁</div><div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-2)">Residual Stream x1</span><p>你的 H 宽修正量可以加给我。结果 x2 会交给下一层。</p></div></div>
-          </div>
-          <div class="chat-typing" style="display:none"><div class="chat-avatar" id="chat-ffn-residual-typing-avatar">?</div><div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div></div>
-          <div class="chat-controls"><button class="btn chat-next-btn">下一条</button><button class="btn chat-all-btn">播放全部</button><button class="btn chat-reset-btn">重播</button><span class="chat-progress"></span></div>
+        <h2 class="screen-heading">FFN 内部是 H → I → H</h2>
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">H</div><p><strong>ffn_input</strong><br>[B,S,H]<br>本例 [1,3,4]</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">I</div><p><strong>gate_raw / up</strong><br>[B,S,I]<br>本例 [1,3,6]</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">I</div><p><strong>SiLU(gate) × up</strong><br>mixed [B,S,I]<br>本例 [1,3,6]</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">H</div><p><strong>down_proj</strong><br>ffn_output [B,S,H]<br>本例 [1,3,4]</p></div>
         </div>
+        <p class="takeaway"><code>I</code> 只是 FFN 的内部工作宽度。支路出口必须由 <code>down_proj</code> 压回 <code>H</code>，才能与 <code>residual_1 [B,S,H]</code> 相加。</p>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">为什么是 x1 + FFN，而不是 x0 + FFN</h2>
-        <svg viewBox="0 0 940 310" role="img" aria-label="两次 residual 形成串行依赖" style="width:100%;height:auto">
-          <defs><marker id="arrow-m3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2A7B9B"/></marker></defs>
-          <rect x="30" y="105" width="120" height="72" rx="12" fill="#fff" stroke="#2A7B9B" stroke-width="3"/><text x="90" y="135" text-anchor="middle" font-weight="700">x₀</text><text x="90" y="160" text-anchor="middle">[B,S,H]</text>
-          <line x1="150" y1="141" x2="215" y2="141" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m3)"/>
-          <rect x="225" y="70" width="180" height="142" rx="16" fill="#E4F2F7" stroke="#2A7B9B" stroke-width="4"/><text x="315" y="108" text-anchor="middle" font-weight="800">Attention branch</text><text x="315" y="140" text-anchor="middle">norm → GQA → o_proj</text><text x="315" y="178" text-anchor="middle" font-weight="700">x₁ = x₀ + attn</text>
-          <line x1="405" y1="141" x2="470" y2="141" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m3)"/>
-          <rect x="480" y="70" width="180" height="142" rx="16" fill="#E8F5EE" stroke="#2D8B55" stroke-width="4"/><text x="570" y="108" text-anchor="middle" font-weight="800">FFN branch</text><text x="570" y="140" text-anchor="middle">norm → H→I→H</text><text x="570" y="178" text-anchor="middle" font-weight="700">x₂ = x₁ + ffn</text>
-          <line x1="660" y1="141" x2="725" y2="141" stroke="#2A7B9B" stroke-width="4" marker-end="url(#arrow-m3)"/>
-          <rect x="735" y="105" width="170" height="72" rx="12" fill="#fff" stroke="#D4A843" stroke-width="3"/><text x="820" y="135" text-anchor="middle" font-weight="700">下一 decoder layer</text><text x="820" y="160" text-anchor="middle">继续读取 x₂</text>
-          <path d="M90,190 C90,270 315,270 315,220" fill="none" stroke="#D94F30" stroke-width="3" stroke-dasharray="8 5"/><text x="200" y="292" text-anchor="middle" fill="#D94F30">residual_0 保存 x₀</text>
-          <path d="M420,220 C420,270 570,270 570,220" fill="none" stroke="#7B6DAA" stroke-width="3" stroke-dasharray="8 5"/><text x="495" y="292" text-anchor="middle" fill="#7B6DAA">residual_1 保存 x₁</text>
-        </svg>
-        <div class="callout callout-warning"><div class="callout-icon">!</div><div class="callout-content"><strong class="callout-title">常见断路</strong><p>若第二次相加错误使用 x0，Attention 写入 x1 的更新不会沿主干直接传给下一层。</p></div></div>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">真实代码与 shape 翻译</h2>
+        <h2 class="screen-heading">第二次 residual 的基线是 x₁</h2>
         <div class="translation-block animate-in">
-          <div class="translation-code"><span class="translation-label">0009_explore_decoder_layer.py</span><pre><code><span class="code-line">residual_1 = hidden_after_attention</span>
+          <div class="translation-code"><span class="translation-label">真实代码</span><pre><code><span class="code-line">residual_1 = hidden_after_attention</span>
 <span class="code-line">ffn_input = post_attention_norm(residual_1)</span>
 <span class="code-line">ffn_trace = mlp.trace(ffn_input)</span>
 <span class="code-line">ffn_output = ffn_trace["output"]</span>
 <span class="code-line">layer_output = residual_1 + ffn_output</span></code></pre></div>
-          <div class="translation-english"><span class="translation-label">逐行翻译</span><div class="translation-lines"><p class="tl">保存已经包含 Attention 的 x1。</p><p class="tl">第二套 norm 读取 x1，shape 仍是 [B,S,H]。</p><p class="tl">FFN 内部产生 gate/up/mixed [B,S,I]。</p><p class="tl">down_proj 把支路压回 [B,S,H]。</p><p class="tl">把 FFN 修正量加回 x1，得到最终 x2。</p></div></div>
+          <div class="translation-english"><span class="translation-label">数据依赖</span><div class="translation-lines"><p class="tl">保存 x₁，它已经包含 x₀ 与 Attention 更新。</p><p class="tl">第二套 RMSNorm 读取 x₁。</p><p class="tl">FFN 在每个 token 内部独立计算。</p><p class="tl">down_proj 给出 H 宽修正量。</p><p class="tl">把修正量加回 x₁，得到 x₂。</p></div></div>
         </div>
+        <div class="callout callout-warning"><div class="callout-icon">≠</div><div class="callout-content"><strong class="callout-title">不能写成 x₀ + ffn_output</strong><p><code>x₀</code> 不包含第一条支路的结果；第二次相加跳回 x₀，会切断 layer 的串行主干。</p></div></div>
       </section>
 
       <section class="screen animate-in">
-        <h2 class="screen-heading">FFN 的 H → I → H 像临时工作台</h2>
-        <div class="flow-steps"><div class="flow-step"><div class="flow-step-num">H</div><p>ffn_input<br>[1,3,4]</p></div><div class="flow-arrow">→</div><div class="flow-step"><div class="flow-step-num">I</div><p>gate / up / mixed<br>[1,3,6]</p></div><div class="flow-arrow">→</div><div class="flow-step"><div class="flow-step-num">H</div><p>down_proj output<br>[1,3,4]</p></div><div class="flow-arrow">→</div><div class="flow-step"><div class="flow-step-num">+</div><p>与 x1 相加<br>得到 x2</p></div></div>
-        <p>中间的 I 只是 <span class="term" data-definition="Intermediate size 是 FFN 内部临时扩展的特征宽度。它不属于 residual stream 的对外接口。">intermediate size</span>，必须在支路出口处消失。</p>
-      </section>
-
-      <section class="screen animate-in">
-        <h2 class="screen-heading">应用题</h2>
-        <div class="quiz-container" id="quiz-m3"><div class="quiz-question-block" data-correct="b" data-explanation-right="正确。第二个 residual 的基线是 x1，因为 FFN 支路是在 Attention 已更新后的主干上继续工作。" data-explanation-wrong="把时间顺序画出来：x0 经过第一条支路成为 x1，第二条支路只能从 x1 继续。"><h3 class="quiz-question">若 FFN 输出为 f，哪个式子不会丢掉第一条支路的主干更新？</h3><div class="quiz-options"><button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x2 = x0 + f</span></button><button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x2 = x1 + f</span></button><button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>x2 = norm(x1) + f</span></button></div><div class="quiz-feedback"></div></div><button class="quiz-check-btn" onclick="checkQuiz('quiz-m3')">检查答案</button><button class="quiz-reset-btn" onclick="resetQuiz('quiz-m3')">重试</button></div>
+        <h2 class="screen-heading">用一个 token 检查数据，而不是背小数</h2>
+        <div class="comparison-table"><table>
+          <thead><tr><th>对象</th><th>token 1 的四个特征</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td><code>x₀</code></td><td><code>[2.0000, 0.0000, 1.0000, 3.0000]</code></td><td>进入 layer 的主干</td></tr>
+            <tr><td>Attention branch</td><td><code>[0.0018, 0.0046, 0.0073, 0.0101]</code></td><td>第一条支路修正量</td></tr>
+            <tr><td><code>x₁</code></td><td><code>[2.0018, 0.0046, 1.0073, 3.0101]</code></td><td>x₀ + Attention branch</td></tr>
+            <tr><td>FFN branch</td><td><code>[0.0003, 0.0008, 0.0012, 0.0016]</code></td><td>第二条支路修正量</td></tr>
+            <tr><td><code>x₂</code></td><td><code>[2.0022, 0.0053, 1.0085, 3.0116]</code></td><td>x₁ + FFN branch</td></tr>
+          </tbody>
+        </table></div>
+        <p>这些数值只用于验证加法关系。需要长期记住的是 <code>x₀ → x₁ → x₂</code>，不是四位小数。</p>
       </section>
     </div>
   </div>

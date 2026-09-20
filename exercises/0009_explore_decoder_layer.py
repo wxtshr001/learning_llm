@@ -46,6 +46,8 @@ def main() -> None:
     print("=== 1. Complete pre-norm layer flow ===")
     print("hidden_states / residual_0 [B,S,H]:", tuple(residual_0.shape))
     print("attention_input [B,S,H]:", tuple(attention_input.shape))
+    print("q_raw [B,S,Nq*D]:", tuple(attention_trace["q_raw"].shape))
+    print("k/v raw [B,S,Nkv*D]:", tuple(attention_trace["k_raw"].shape))
     print("Q split [B,Nq,S,D]:", tuple(attention_trace["query"].shape))
     print("K/V split [B,Nkv,S,D]:", tuple(attention_trace["key"].shape))
     print("weights [B,Nq,S,S]:", tuple(attention_trace["weights"].shape))
@@ -76,6 +78,8 @@ def main() -> None:
 
     assert residual_0.shape == attention_input.shape == attention_output.shape
     assert hidden_after_attention.shape == ffn_input.shape == ffn_output.shape == layer_output.shape
+    assert attention_trace["q_raw"].shape == (batch, sequence, num_query_heads * head_dim)
+    assert attention_trace["k_raw"].shape == attention_trace["v_raw"].shape == (batch, sequence, num_kv_heads * head_dim)
     assert attention_trace["query"].shape == (batch, num_query_heads, sequence, head_dim)
     assert attention_trace["key"].shape == (batch, num_kv_heads, sequence, head_dim)
     assert ffn_trace["mixed"].shape == (batch, sequence, intermediate)

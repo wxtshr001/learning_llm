@@ -40,7 +40,8 @@ x1 = residual_0 + attention_output</pre>
 <section><h2>3. 第一条支路：RMSNorm → GQA Attention → residual</h2>
 <pre>x0 [1,3,4]
  → input_norm                 [1,3,4]
- → q/k/v projections
+ → q_raw                     [1,3,4]
+   k_raw / v_raw             [1,3,2]
  → Q [1,2,3,2]
    K [1,1,3,2]
    V [1,1,3,2]

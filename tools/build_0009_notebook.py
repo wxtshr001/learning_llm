@@ -117,7 +117,20 @@ attention_output = self_attn(attention_input, position_ids)
 x1 = residual_0 + attention_output
 ```
 
-**先预测：** norm 会不会改变 shape？Attention 内部哪些 tensor 有 head axis？`o_proj` 后为什么必须回到 H？
+Attention 的完整阶段是：
+
+| 阶段 | 通用 shape | 本课 shape | 显式 head axis？ |
+|---|---|---|---|
+| q_raw | `[B,S,Nq*D]` | `[1,3,4]` | 否 |
+| k_raw / v_raw | `[B,S,Nkv*D]` | `[1,3,2]` | 否 |
+| Q split | `[B,Nq,S,D]` | `[1,2,3,2]` | 是 |
+| K/V split | `[B,Nkv,S,D]` | `[1,1,3,2]` | 是 |
+| scores / weights | `[B,Nq,S,S]` | `[1,2,3,3]` | 是 |
+| head output | `[B,Nq,S,D]` | `[1,2,3,2]` | 是 |
+| merged | `[B,S,Nq*D]` | `[1,3,4]` | 否 |
+| attention_output | `[B,S,H]` | `[1,3,4]` | 否 |
+
+**先预测：** norm 会不会改变 shape？为什么 `k_raw` 的最后一维是 2 而不是 H=4？`o_proj` 后为什么必须回到 H？
 """)
 
 code("""
@@ -127,9 +140,11 @@ attention_trace = self_attn.trace(attention_input, position_ids)
 attention_output = attention_trace["output"]
 x1 = residual_0 + attention_output
 
-for name in ("query", "key", "value", "weights", "head_output", "merged", "output"):
+for name in ("q_raw", "k_raw", "v_raw", "query", "key", "value", "weights", "head_output", "merged", "output"):
     print(f"{name:>12}:", tuple(attention_trace[name].shape))
 print("x1:", tuple(x1.shape))
+assert attention_trace["q_raw"].shape == (B, S, Nq * D)
+assert attention_trace["k_raw"].shape == attention_trace["v_raw"].shape == (B, S, Nkv * D)
 assert attention_input.shape == attention_output.shape == x1.shape == (B, S, H)
 """)
 
@@ -235,8 +250,16 @@ markdown("""
 
 - Parameter：两个 norm weight；q/k/v/o projection；gate/up/down projection。
 - 运行输入：hidden_states、position_ids。
-- Activation：所有 norm/branch/attention/FFN 中间 tensor，以及 x1/x2。
+- Activation：norm 输出、q/k/v raw、Q/K/V、angles、cos/sin、scores/weights、两个 residual、gate/up/mixed，以及 x1/x2。
 - 0009 请求 state：没有。0010 的历史 K_rope/V Cache 才跨 decode steps 保存。
+
+| 执行阶段 | 当前输入的 S | 历史 K/V Cache |
+|---|---|---|
+| full-sequence | 整段序列长度，例如 S=5 | 0009 不跨调用保存 |
+| prefill | prompt 长度，通常 S>1 | 建立初始 Cache |
+| 单步 decode | 通常 S=1 | 读取历史 Cache，并追加本步 K/V |
+
+同一个 K/V tensor 在 0009 的一次 forward 中是 activation；到 0010 被跨 decode step 保存后，才成为请求 state。
 """)
 
 code("""
