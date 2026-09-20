@@ -23,12 +23,13 @@
 - 已能处理 attention mask 的 device 与 positive-D 代码 contract；对增量解码和完整 KV Cache 仍只具初步直觉。
 - 第 0007 课首次提交已证明 MHA/GQA/MQA 边界、Q→KV 连续分组、逐 head 数值、GQA attention 代码、KV Cache 主公式和 decode 带宽意义。
 - 第 0007 课已在 0007R 后正式通过；能稳定区分 raw/split/logical/merge tensor、显式 head axis 和 concat/average。
+- 第 0008 课 95/100 正式通过；能实现并解释 Qwen half-split RoPE、position/frequency/cos/sin、相对位置 score、GQA 广播以及旋转后 K 的 Cache 位置。
 
 ## 当前必须从基础解释的内容
 
 - PyTorch tensor 的 rank、shape、axis/dim、stride、view、contiguous 和 broadcasting 规则。
 - Python/PyTorch API 的语义、报错边界和调试方法。
-- RoPE、完整 KV Cache layout、decoder forward、计算图导出与 runtime 分层。
+- 完整 KV Cache layout、完整 decoder forward、计算图导出与 runtime 分层。
 
 ## 强制教学适配
 
@@ -45,7 +46,7 @@
 
 ## 当前最近发展区
 
-当前进行第 0008 课：在已掌握 GQA shape/axis 的基础上，从二维旋转开始建立 Qwen-style half-split RoPE、position cos/sin、相对位置点积与 GQA 广播。
+下一步进入第 0009 课：在已分别掌握 RMSNorm、GQA Attention、RoPE、gated FFN 和 residual 的基础上，组装一个完整 Tiny Decoder Layer，并追踪两条 pre-norm residual 路径。
 
 ## 更新规则
 

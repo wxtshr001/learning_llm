@@ -19,6 +19,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 COURSE_SUFFIXES = {".md", ".html", ".ipynb"}
+IGNORED_DIRECTORY_NAMES = {".git", ".ipynb_checkpoints", "__pycache__"}
 LINK_PATTERN = re.compile(r'(?:href=["\']|\]\()(?P<url>[^"\')#\s]+)')
 
 
@@ -43,6 +44,8 @@ def collect_links() -> tuple[list[tuple[Path, str]], set[str]]:
     external_links: set[str] = set()
 
     for path in ROOT.rglob("*"):
+        if any(part in IGNORED_DIRECTORY_NAMES for part in path.parts):
+            continue
         if not path.is_file() or path.suffix.lower() not in COURSE_SUFFIXES:
             continue
         text = read_link_text(path)

@@ -1,10 +1,10 @@
 # Current Learning State
 
-更新时间：2026-08-23
+更新时间：2026-09-20
 
 ## 当前门禁
 
-**0007R 98/100，通过；第 0007 课正式完成。当前第 0008 课 RoPE 已开始，等待学习者提交。**
+**0008 95/100，通过；第 0008 课 RoPE 正式完成。下一课为 0009 Tiny Decoder Layer。**
 
 0004 独立脚本已由 Agent 复跑，全部检查通过。两处公式抄写/变量名笔误未改变完整数值链与概念结论，因此仅轻微扣分，不安排重复补强。当前进入 RMSNorm 与 gated FFN。
 
@@ -27,6 +27,16 @@
 - 0006R 95/100：两个求和轴、完整 decoder block 路径与代码 contract 通过，第 0006 课正式完成。
 - 第 0007 课异议复核后 89/100：head 映射、逐 head 数值、GQA 代码、KV Cache 主计算、decode 带宽意义与题面内 inference 迁移已证明；只剩 raw/split/merge tensor 阶段待补强。
 - 0007R 98/100：raw/split/logical/merge、显式 head axis 与 concat/average 门禁通过，第 0007 课正式完成。
+- 第 0008 课 95/100：独立 RoPE 代码与关键题 1、2、3 全部通过；二维旋转、half-split、相对 score、GQA 广播、prefill/decode position 和 Cache 位置已证明。
+
+## 第 0008 课最终能力状态
+
+- 已证明 Qwen half-split 的逐 axis 旋转、默认频率构造和 Q/K 数值实现。
+- 已证明相同相对位置差的 score 效应，并区分 RoPE 与 causal mask。
+- 已证明不同 Nq/Nkv 下 cos/sin 的 head-axis 广播以及 RoPE → Cache → attention 执行顺序。
+- 独立脚本在 CUDA 复跑通过；额外 CPU、不同 shape、默认频率和非法输入测试通过。
+- 范数平方项顺序写反但总和与结论正确，属于局部抄写。
+- `position_ids` 应为运行输入，不是请求 state；请求 state 是历史 K_rope 与 V。该错误位于非关键题，不触发补强。
 
 ## 第 0006 课最终能力状态
 
@@ -81,19 +91,18 @@
 
 ## 学习者下一步
 
-1. 从上到下运行 `notebooks/0008-rope-from-rotation-to-gqa.ipynb`，先预测再执行每组代码单元；HTML 仅作备用阅读版。
-2. 如需脱离 notebook 复跑完整示范，运行 `exercises/0008_explore_rope.py`。
-3. 完成 `exercises/0008_rope.py` 的 TODO 并运行测试。
-4. 查看 `reference/0008-rope-cheatsheet.html` 后关闭资料。
-5. 闭卷完成 `assessments/0008-rope.md`，填写 `submissions/0008.md`。
+进入第 0009 课 Tiny Decoder Layer：把 RMSNorm、GQA Attention、RoPE、gated FFN 和两次 residual add 组装成一个可运行 layer。
 
 ## Agent 下一步
 
-- 收到 0008 前不生成 0009。
-- 0008 独立代码与闭卷第 1、2、3 题通过，且总分至少 80，才进入 Tiny Decoder Layer。
+- 按已证明能力设计 0009，不重考 0008 已通过内容。
+- 0009 必须从完整 Causal LM 数据流定位 decoder layer，再逐步组装两个 pre-norm 子层与 residual。
 
 ## 最近证据
 
+- `submissions/0008-feedback.md`
+- `submissions/0008.md`
+- `learning-records/0013-rope-proven.md`
 - `submissions/0007R-feedback.md`
 - `submissions/0007R.md`
 - `learning-records/0012-mha-gqa-proven.md`

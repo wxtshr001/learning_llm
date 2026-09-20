@@ -1,5 +1,6 @@
 # Teaching Notes
 
+- 2026-09-20：0008 最终 95/100 通过。half-split、相对 score、GQA 广播和执行位置等关键项全部通过；范数平方项顺序为局部抄写，`position_ids` 被误归为 state 是非关键分类错误。历史 K_rope/V 才是请求 state；不安排 RoPE 补强，下一课组装 Tiny Decoder Layer。
 - 2026-09-05：已在 `llm` Conda 环境安装 JupyterLab 4.6.3 与 ipykernel 7.3.0，并注册 `Python 3 (llm)` kernel。真实 Jupyter 执行 0008 notebook 全部单元无错误，临时 Lab 服务 HTTP 200 后已关闭。
 - 2026-09-05：学习者希望教程使用 Jupyter 形式，以“知识点 + Python 代码块”帮助形式化理解。0008 已增加 35-cell notebook，其中 14 个代码单元按顺序执行通过；后续数学/PyTorch 课程优先交替组织解释、预测、代码和 assert，而不是连续长篇静态正文。
 - 2026-08-23：学习者指出 0008 初版仍过于抽象。问题不是“缺少数字”，而是从少量数字过快跳到 inv_freq、旋转矩阵和相对位置公式，缺少角度/弧度/cos/sin 前置、D=4 每个 axis 的表格、一个 token 的 Q/K 全链和广播逐步解释。0008 已按“钟表方向 → 二维旋转 → half-split 索引表 → position/频率 → 单 token Q/K → GQA shape → 系统路径 → 代码”重写；原提交不开始计分。

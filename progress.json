@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-05",
+  "updated_at": "2026-09-20",
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
     "lesson_id": "0008",
     "title": "RoPE from 2D rotation to GQA position-aware scores",
-    "status": "in_progress",
+    "status": "complete",
     "lesson": "notebooks/0008-rope-from-rotation-to-gqa.ipynb",
     "html_lesson": "lessons/0008-rope-from-rotation-to-gqa.html",
     "guided_exercise": "exercises/0008_explore_rope.py",
@@ -15,22 +15,22 @@
     "submission": "submissions/0008.md",
     "reference": "reference/0008-rope-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-09-05: lesson 0008 now uses a 35-cell Jupyter notebook as the primary tutorial, alternating concrete knowledge, prediction prompts, executable PyTorch cells, shape traces, and assertions; the HTML lesson remains as a fallback",
-  "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006", "0007"],
+  "current_lesson_revision": "2026-09-20: lesson 0008 passed at 95; code and critical questions 1-3 passed, with only a local position_ids runtime-input classification correction",
+  "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R", "0007R"],
   "next_normal_lesson": "0009",
-  "next_course_generated": true,
+  "next_course_generated": false,
   "gate": {
     "minimum_score": 80,
-    "score": null,
-    "result": "awaiting_submission",
+    "score": 95,
+    "result": "passed",
     "critical_items": ["code", "question_1", "question_2", "question_3"],
     "failed_critical_items": [],
-    "previous_adjudication": "lesson 0007R passed at 98; lesson 0008 must teach RoPE before grading its system placement and must not require full Cache implementation"
+    "previous_adjudication": "lesson 0008 passed at 95; position_ids is a runtime input, while historical K_rope and V are request state; this local non-critical classification error does not require remediation"
   },
   "last_verified_evidence": [
-    "submissions/0007R-feedback.md",
-    "submissions/0007R.md",
-    "learning-records/0012-mha-gqa-proven.md"
+    "submissions/0008-feedback.md",
+    "submissions/0008.md",
+    "learning-records/0013-rope-proven.md"
   ]
 }

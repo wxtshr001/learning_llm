@@ -8,8 +8,19 @@ import torch
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
     """Return [-second_half, first_half] along the last axis."""
     # TODO 1: validate positive even D, then implement Qwen-style half rotation.
-    raise NotImplementedError
+    if x.ndim == 0:
+        raise ValueError("x must have at least one dimension")
 
+    head_dim = x.shape[-1]
+    if head_dim <= 0 or head_dim % 2 != 0:
+        raise ValueError(
+            f"last dimension must be positive and even, got {head_dim}"
+        )
+
+    half = head_dim // 2
+    first_half = x[..., :half]
+    second_half = x[..., half:]
+    return torch.cat((-second_half, first_half), dim=-1)
 
 def build_rope_cos_sin(
     position_ids: torch.Tensor,
@@ -19,7 +30,36 @@ def build_rope_cos_sin(
     """Return cos/sin [B,S,D] for position_ids [B,S]."""
     # TODO 2: validate rank/integer positions, positive even D, and positive base.
     # TODO 3: build inv_freq[D/2], angles[B,S,D/2], then duplicate to D.
-    raise NotImplementedError
+    if position_ids.ndim != 2:
+        raise ValueError(
+            f"position_ids must be rank 2 [B,S], got shape {tuple(position_ids.shape)}"
+        )
+    if position_ids.dtype not in (torch.int8, torch.int16, torch.int32, torch.int64):
+        raise ValueError(f"position_ids must be integer, got {position_ids.dtype}")
+    if head_dim <= 0 or head_dim % 2 != 0:
+        raise ValueError(f"head_dim must be positive and even, got {head_dim}")
+    if base <= 0:
+        raise ValueError(f"base must be positive, got {base}")
+
+    device = position_ids.device
+    dtype = torch.float32
+
+    # inv_freq: [D/2]
+    inv_freq = 1.0 / (
+        base
+        ** (
+            torch.arange(0, head_dim, 2, device=device, dtype=dtype)
+            / head_dim
+        )
+    )
+
+    # position_ids: [B,S] -> [B,S,1]
+    # inv_freq:     [D/2] -> [1,1,D/2]
+    angles = torch.einsum('bs,i->bsi', position_ids, inv_freq)
+
+    # Qwen-style: duplicate frequencies to full head_dim.
+    emb = torch.cat((angles, angles), dim=-1)
+    return emb.cos(), emb.sin()
 
 
 def apply_rope(
@@ -31,7 +71,42 @@ def apply_rope(
     """Rotate Q [B,Nq,S,D] and K [B,Nkv,S,D] without changing shape."""
     # TODO 4: validate rank, B/S/D, device, dtype, cos/sin [B,S,D], and even D.
     # TODO 5: unsqueeze cos/sin on head axis and apply x*cos + rotate_half(x)*sin.
-    raise NotImplementedError
+    if query.ndim != 4 or key.ndim != 4:
+        raise ValueError(
+            f"query and key must be rank 4 [B,N,S,D], got {query.ndim} and {key.ndim}"
+        )
+    if cos.ndim != 3 or sin.ndim != 3:
+        raise ValueError(
+            f"cos and sin must be rank 3 [B,S,D], got {cos.ndim} and {sin.ndim}"
+        )
+
+    B, Nq, S, D = query.shape
+    Bk, Nkv, Sk, Dk = key.shape
+    if B != Bk or S != Sk or D != Dk:
+        raise ValueError(
+            "query and key must share B/S/D, "
+            f"got query {tuple(query.shape)} and key {tuple(key.shape)}"
+        )
+    if D <= 0 or D % 2 != 0:
+        raise ValueError(f"last dimension must be positive and even, got {D}")
+    if cos.shape != (B, S, D) or sin.shape != (B, S, D):
+        raise ValueError(
+            f"cos/sin must have shape {(B, S, D)}, "
+            f"got {tuple(cos.shape)} and {tuple(sin.shape)}"
+        )
+    if query.device != key.device or query.device != cos.device or query.device != sin.device:
+        raise ValueError("query, key, cos, sin must be on the same device")
+    if query.dtype != key.dtype or query.dtype != cos.dtype or query.dtype != sin.dtype:
+        raise ValueError("query, key, cos, sin must have the same dtype")
+    if not query.is_floating_point():
+        raise ValueError("query and key must be floating point")
+
+    cos = cos.unsqueeze(1)  # [B, 1, S, D]
+    sin = sin.unsqueeze(1)  # [B, 1, S, D]
+
+    query_rotated = query * cos + rotate_half(query) * sin
+    key_rotated = key * cos + rotate_half(key) * sin
+    return query_rotated, key_rotated
 
 
 def run_tests() -> None:
