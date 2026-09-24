@@ -1,6 +1,6 @@
 # Current Learning State
 
-更新时间：2026-09-20
+更新时间：2026-09-25
 
 ## 当前门禁
 
@@ -72,6 +72,7 @@
 
 ## 课程设计修订
 
+- 2026-09-25：学习者指出 0009 闭卷题缺少明确前提，尤其第 4.1 题没有说明“哪个 layer 的 Parameter”。已为整卷补充本层结构、输入、无 bias 和 full-sequence 边界；逐题澄清 `Nq*D=H` 时 `o_proj` 的作用、shape 阶段、固定输入条件、residual 引用及 Cache 假设。分值和关键门禁未变；这是题面设计修订，不记录为学习者知识缺口。修订细节见 `submissions/0009-feedback.md`。
 - 2026-09-20：学习者指出 0009 第二版互动形式过多、信息增量不足。已删除组件聊天、逐步消息动画和重复测验，将五模块收敛为四模块；主教程现明确覆盖 q/k/v raw → split → scores → head output → merge、全部符号、cos/sin 分类以及 full-sequence/prefill/decode 边界。课程设计规则改为“按问题选择最少有效图”，不再要求同一结论使用多种视觉形式重复表达。
 - 2026-09-20（已被上条修订取代）：学习者指出 0009 初版过于简略，曾增加五模块互动教程；随后确认该版形式过多、信息不足，因此不再作为当前设计。
 - 2026-09-05：按学习者要求，0008 增加 Jupyter 主教程 `notebooks/0008-rope-from-rotation-to-gqa.ipynb`；35 个单元按“知识点 → 先预测 → Python/PyTorch 代码 → assert 验证”组织，14 个代码单元已在 `llm` 环境顺序执行通过。原 HTML 保留为备用阅读版，作业与门禁不变。
@@ -93,7 +94,7 @@
 
 ## 学习者下一步
 
-1. 打开 `lessons/0009-tiny-decoder-layer-course/index.html`，依次完成五个可视化模块。
+1. 打开 `lessons/0009-tiny-decoder-layer-course/index.html`，依次完成四个可视化模块。
 2. 从上到下运行 `notebooks/0009-tiny-decoder-layer.ipynb`，每个预测题先回答再执行。
 3. 运行 `exercises/0009_explore_decoder_layer.py`，核对完整 shape 与两次 residual 数值。
 4. 完成 `exercises/0009_tiny_decoder_layer.py` 的组装 TODO 并运行测试。

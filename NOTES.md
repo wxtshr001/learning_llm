@@ -1,5 +1,6 @@
 # Teaching Notes
 
+- 2026-09-25：学习者指出 0009 assessment 的题目对象和前提不清楚，尤其“列 Parameter”没有指定 layer 结构与输入。评测题须能脱离教程独立理解：卷首给模型边界和配置，每题限定观察对象、固定条件、预期答案粒度；题面歧义在作答前修正，不计为知识缺口。
 - 2026-09-20：0009 第二版因套用通用互动课程模板而过度设计：聊天动画、流程动画、结构图和选择题重复表达 x₀→x₁→x₂，却没有同步补齐 q/k/v raw、cos/sin 生命周期和 full-sequence/prefill/decode。已改为四个高信息密度模块，只保留完整 residual 数据流、Attention shape 链、FFN H→I→H 和 causal token 矩阵；所有闭卷考点必须能从主教程直接找到。
 - 2026-09-20：学习者指出 0009 初版虽然给出了完整代码路径，但正文太短、图示表达弱，无法建立组件之间的空间关系和执行顺序。已将可视化互动教程提升为主入口，补齐完整 Causal LM 位置图、两条 residual 的 UML/数据流、shape swimlane、causal token 依赖矩阵、逐步动画与随堂题；旧 HTML 仅保留备用。后续架构组装课不得用更多文字代替结构图。
 - 2026-09-20：0009 已生成。只新增 pre-norm decoder layer 的组装与两条 residual 数据依赖；已通过的 RMSNorm、GQA、RoPE、FFN 作为提供组件复用。固定数字为 B=1,S=3,H=4,Nq=2,Nkv=1,D=2,I=6，notebook 10 个代码单元与引导脚本已顺序执行通过。

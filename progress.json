@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-20",
+  "updated_at": "2026-09-25",
   "mission": "On-device LLM Systems",
   "repository": "git@github.com:wxtshr001/learning_llm.git",
   "current": {
@@ -16,7 +16,7 @@
     "submission": "submissions/0009.md",
     "reference": "reference/0009-tiny-decoder-layer-cheatsheet.html"
   },
-  "current_lesson_revision": "2026-09-20: lesson 0009 was simplified to four information-dense modules; redundant chat and flow animations were removed, while q/k/v raw shapes, lifecycle classification, and full-sequence/prefill/decode boundaries were added to make the primary course assessment-complete",
+  "current_lesson_revision": "2026-09-25: assessment 0009 now states the layer structure, input and no-bias assumptions and clarifies each question's scope; scoring and critical gates are unchanged",
   "completed_lessons": ["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"],
   "completed_remediation": ["0001R", "0001R2", "0002R", "0005R", "0006R", "0007R"],
   "next_normal_lesson": "0010",

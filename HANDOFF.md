@@ -16,7 +16,8 @@
 - 第 0005 课首次提交 82/100，0005R 最终 90/100；统计量/Parameter/运行 tensor 与 Linear `[out,in]` 门禁通过，第 0005 课正式完成。
 - 第 0006 课首次提交 87/100，0006R 最终 95/100；全部关键项通过，第 0006 课正式完成。
 - 第 0007 课异议复核后为 89/100，0007R 最终 98/100；raw/split/logical/merge、显式 head axis 与 concat/average 已通过，第 0007 课正式完成。
-- 当前第 0008 课 RoPE 已生成并开始：Jupyter 主教程把二维旋转、Qwen half-split、position cos/sin、相对点积和 GQA 广播拆成知识点与可执行 PyTorch 单元；HTML 阅读版仍保留。收到 0008 前不要生成第 0009 课。
+- 第 0008 课 RoPE 95/100，通过；独立代码及关键题 1、2、3 均有证据。
+- 当前第 0009 课 Tiny Decoder Layer 进行中。主教程为四模块可视化课程；2026-09-25 已澄清闭卷题的共同前提与各题范围，等待学习者提交。收到 0009 前不要生成第 0010 课。
 
 精确文件和下一动作以 `CURRENT-STATE.md` 与 `progress.json` 为准。
 
@@ -36,4 +37,4 @@
 
 ## Resume procedure
 
-遵守 `AGENTS.md`，先拉取 `main`。收到 0008 后复跑独立脚本，并检查 half-split 逐元素旋转、相对位置 score、GQA shape/broadcast 和明确教授过的 RoPE 执行位置；关键项未通过不得进入 Tiny Decoder Layer。
+遵守 `AGENTS.md`，先拉取 `main`。收到 0009 后复跑独立脚本，并检查两条 pre-norm residual 路径、完整 shape、token 因果性和第 4 题的对象分类；独立代码及关键题 1、2、3 未通过不得进入 KV Cache 增量执行。
